@@ -25,6 +25,7 @@ from app.models.evidence import (
     ALLOWED_EVIDENCE_MIME_TYPES,
     EvidenceUploadResponse,
     EvidenceVerifyResponse,
+    validate_evidence_content,
 )
 from app.models.incident import (
     IncidentCategory,
@@ -174,6 +175,9 @@ class InMemoryRepository(BaseRepository):
             raise PayloadTooLargeError(
                 f"File size {size_bytes} bytes exceeds maximum {self.max_upload_bytes} bytes."
             )
+
+        # Validate content magic bytes (prevents header spoofing)
+        validate_evidence_content(content, mime_type)
 
         # Compute SHA-256 on received bytes
         sha256_hash = hashlib.sha256(content).hexdigest().lower()

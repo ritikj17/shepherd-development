@@ -30,6 +30,7 @@ from app.models.evidence import (
     ALLOWED_EVIDENCE_MIME_TYPES,
     EvidenceUploadResponse,
     EvidenceVerifyResponse,
+    validate_evidence_content,
 )
 from app.models.incident import (
     IncidentCategory,
@@ -55,7 +56,10 @@ class SupabasePostgrestRepository(BaseRepository):
 
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
-        self.base_url = settings.supabase_url.rstrip("/")
+        url = settings.supabase_url.rstrip("/")
+        if url.endswith("/rest/v1"):
+            url = url[:-len("/rest/v1")]
+        self.base_url = url
         self.service_key = settings.supabase_service_role_key
         self.anon_key = settings.supabase_anon_key or settings.supabase_service_role_key
         self.headers = {
@@ -185,20 +189,26 @@ class SupabasePostgrestRepository(BaseRepository):
         # Retrieve evidence records to delete storage objects
         evidence_list = await self.list_evidence(user_id, incident_id)
 
-        # Delete database incident (DB cascade will remove DB evidence, analyses, links)
-        params = {"id": f"eq.{incident_id}", "user_id": f"eq.{user_id}"}
-        async with self._client() as client:
-            resp = await client.delete("/rest/v1/incidents", params=params)
-            if resp.status_code >= 400:
-                raise UpstreamServiceError("Failed to delete incident from database.")
-
-        # Clean up storage objects in private bucket
+        # [DEFECT-02 RESOLUTION]: Clean up storage objects in private bucket BEFORE deleting
+        # database incident row. If storage deletion fails or network is interrupted, the
+        # incident and evidence rows remain in the DB, allowing subsequent retries to discover
+        # and clean up the objects rather than leaving untraceable orphaned files in storage.
+        # Note: Complete two-phase distributed atomicity between PostgreSQL and Supabase Storage
+        # is not supported over HTTP; deleting storage objects prior to DB record removal ensures
+        # fail-safe idempotency without orphaned blobs.
         for ev in evidence_list:
             storage_path = f"{user_id}/{incident_id}/{ev.id}/{_sanitize_filename(ev.file_name)}"
             try:
                 await self._delete_storage_object(self.evidence_bucket, storage_path)
             except Exception as exc:
                 logger.warning("Failed to delete storage object %s: %s", storage_path, exc)
+
+        # Delete database incident (DB cascade will remove DB evidence, analyses, links)
+        params = {"id": f"eq.{incident_id}", "user_id": f"eq.{user_id}"}
+        async with self._client() as client:
+            resp = await client.delete("/rest/v1/incidents", params=params)
+            if resp.status_code >= 400:
+                raise UpstreamServiceError("Failed to delete incident from database.")
 
     # ---------------- Evidence ----------------
     async def upload_evidence(
@@ -224,6 +234,9 @@ class SupabasePostgrestRepository(BaseRepository):
             raise PayloadTooLargeError(
                 f"File size {size_bytes} bytes exceeds maximum {self.max_upload_bytes} bytes."
             )
+
+        # [DEFECT-01 RESOLUTION]: Validate magic bytes against declared MIME type
+        validate_evidence_content(content, mime_type)
 
         sha256_hash = hashlib.sha256(content).hexdigest().lower()
         evidence_id = uuid4()
@@ -514,4 +527,6 @@ class SupabasePostgrestRepository(BaseRepository):
         }
         payload = {"prefixes": [path]}
         async with httpx.AsyncClient(base_url=self.base_url, headers=headers, timeout=15.0) as client:
-            await client.delete(url, json=payload)
+            resp = await client.request("DELETE", url, json=payload)
+            if resp.status_code >= 400:
+                logger.warning("Storage object deletion returned error: %s %s", resp.status_code, resp.text)

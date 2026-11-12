@@ -1,3 +1,4 @@
+import jwt
 import pytest
 from uuid import uuid4
 from httpx import AsyncClient
@@ -61,6 +62,21 @@ async def test_auth_malformed_token_rejected(client: AsyncClient) -> None:
     resp = await client.get(
         "/api/v1/incidents",
         headers={"Authorization": "Bearer not-a-valid-jwt-token"},
+    )
+    assert resp.status_code == 401
+    assert resp.json()["error"]["code"] == "UNAUTHORIZED"
+
+
+@pytest.mark.asyncio
+async def test_auth_none_algorithm_rejected(client: AsyncClient) -> None:
+    none_token = jwt.encode(
+        {"sub": str(uuid4()), "aud": "authenticated", "iss": "https://test.supabase.co/auth/v1", "exp": 9999999999},
+        key="",
+        algorithm="none",
+    )
+    resp = await client.get(
+        "/api/v1/incidents",
+        headers={"Authorization": f"Bearer {none_token}"},
     )
     assert resp.status_code == 401
     assert resp.json()["error"]["code"] == "UNAUTHORIZED"

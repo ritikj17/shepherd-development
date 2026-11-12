@@ -70,11 +70,18 @@ class Settings(BaseSettings):
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
     @property
+    def effective_supabase_url(self) -> str:
+        url = self.supabase_url.rstrip("/")
+        if url.endswith("/rest/v1"):
+            url = url[:-len("/rest/v1")]
+        return url
+
+    @property
     def effective_jwks_url(self) -> str:
         if self.supabase_jwks_url:
             return self.supabase_jwks_url.rstrip("/")
         if self.supabase_url:
-            return f"{self.supabase_url.rstrip('/')}/auth/v1/.well-known/jwks.json"
+            return f"{self.effective_supabase_url}/auth/v1/.well-known/jwks.json"
         return ""
 
     @property
@@ -82,7 +89,7 @@ class Settings(BaseSettings):
         if self.supabase_jwt_issuer:
             return self.supabase_jwt_issuer.rstrip("/")
         if self.supabase_url:
-            return f"{self.supabase_url.rstrip('/')}/auth/v1"
+            return f"{self.effective_supabase_url}/auth/v1"
         return ""
 
 

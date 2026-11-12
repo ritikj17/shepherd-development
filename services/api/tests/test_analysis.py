@@ -80,7 +80,7 @@ async def test_threat_analysis_orchestration_success(
     )
     incident_id = inc_resp.json()["id"]
 
-    files = {"file": ("screenshot.png", b"test_screenshot_bytes", "image/png")}
+    files = {"file": ("screenshot.png", b"\x89PNG\r\n\x1a\n" + b"test_screenshot_bytes", "image/png")}
     ev_resp = await client.post(
         "/api/v1/evidence",
         data={"incident_id": incident_id},

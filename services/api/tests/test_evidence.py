@@ -1,5 +1,6 @@
 import hashlib
-from uuid import uuid4
+from typing import Any
+from uuid import UUID, uuid4
 import pytest
 from httpx import AsyncClient
 
@@ -146,7 +147,7 @@ async def test_cross_user_evidence_upload_and_verify_denied(
     incident_id = inc_resp.json()["id"]
 
     # User 2 tries to upload evidence to User 1's incident -> 404
-    files = {"file": ("hack.png", b"testbytes", "image/png")}
+    files = {"file": ("hack.png", b"\x89PNG\r\n\x1a\nvalid_png_bytes", "image/png")}
     forbidden_upload = await client.post(
         "/api/v1/evidence",
         data={"incident_id": incident_id},
@@ -222,7 +223,7 @@ async def test_delete_incident_cascades_evidence(
     )
     incident_id = inc_resp.json()["id"]
 
-    files = {"file": ("test.png", b"testpngbytes", "image/png")}
+    files = {"file": ("test.png", b"\x89PNG\r\n\x1a\nvalid_png_payload", "image/png")}
     up_resp = await client.post(
         "/api/v1/evidence",
         data={"incident_id": incident_id},
@@ -240,3 +241,196 @@ async def test_delete_incident_cascades_evidence(
     # Verify database and storage cascade cleanup
     assert len(repo.evidence) == 0
     assert len(repo.storage) == 0
+
+
+@pytest.mark.asyncio
+async def test_upload_evidence_misleading_mime_header_rejected(
+    client: AsyncClient, user_1_headers: dict
+) -> None:
+    """[DEFECT-01 REGRESSION]: Reject uploads where Content-Type does not match file magic bytes."""
+    inc_resp = await client.post(
+        "/api/v1/incidents",
+        json={
+            "title": "Incident for magic bytes test",
+            "description": "desc",
+            "category": "threat",
+            "occurred_at": "2026-11-12T10:00:00Z",
+        },
+        headers=user_1_headers,
+    )
+    incident_id = inc_resp.json()["id"]
+
+    # 1. Executable with image/png header
+    files = {"file": ("fake.png", b"MZ\x90\x00this_is_an_exe", "image/png")}
+    resp = await client.post(
+        "/api/v1/evidence",
+        data={"incident_id": incident_id},
+        files=files,
+        headers=user_1_headers,
+    )
+    assert resp.status_code == 415
+    assert resp.json()["error"]["code"] == "UNSUPPORTED_MEDIA_TYPE"
+
+    # 2. HTML script with image/jpeg header
+    files = {"file": ("fake.jpg", b"<script>alert(1)</script>", "image/jpeg")}
+    resp = await client.post(
+        "/api/v1/evidence",
+        data={"incident_id": incident_id},
+        files=files,
+        headers=user_1_headers,
+    )
+    assert resp.status_code == 415
+    assert resp.json()["error"]["code"] == "UNSUPPORTED_MEDIA_TYPE"
+
+    # 3. Plain text with image/webp header
+    files = {"file": ("fake.webp", b"Just some plain text data", "image/webp")}
+    resp = await client.post(
+        "/api/v1/evidence",
+        data={"incident_id": incident_id},
+        files=files,
+        headers=user_1_headers,
+    )
+    assert resp.status_code == 415
+    assert resp.json()["error"]["code"] == "UNSUPPORTED_MEDIA_TYPE"
+
+
+@pytest.mark.asyncio
+async def test_upload_evidence_all_supported_formats_with_magic_bytes(
+    client: AsyncClient, user_1_headers: dict
+) -> None:
+    """Verify JPEG, PNG, and WebP uploads succeed when genuine magic bytes are provided."""
+    inc_resp = await client.post(
+        "/api/v1/incidents",
+        json={
+            "title": "Incident for valid image formats",
+            "description": "desc",
+            "category": "threat",
+            "occurred_at": "2026-11-12T10:00:00Z",
+        },
+        headers=user_1_headers,
+    )
+    incident_id = inc_resp.json()["id"]
+
+    # 1. Valid JPEG
+    jpeg_bytes = b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x01\x00`\x00`\x00\x00valid_jpeg"
+    resp = await client.post(
+        "/api/v1/evidence",
+        data={"incident_id": incident_id},
+        files={"file": ("photo.jpg", jpeg_bytes, "image/jpeg")},
+        headers=user_1_headers,
+    )
+    assert resp.status_code == 201
+    assert resp.json()["mime_type"] == "image/jpeg"
+
+    # 2. Valid WebP (RIFF + 4-byte size + WEBP + payload)
+    webp_bytes = b"RIFF\x20\x00\x00\x00WEBPVP8 \x14\x00\x00\x00valid_webp_data_chunk"
+    resp = await client.post(
+        "/api/v1/evidence",
+        data={"incident_id": incident_id},
+        files={"file": ("image.webp", webp_bytes, "image/webp")},
+        headers=user_1_headers,
+    )
+    assert resp.status_code == 201
+    assert resp.json()["mime_type"] == "image/webp"
+
+    # 3. Valid PNG
+    png_bytes = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDRvalid_png_data"
+    resp = await client.post(
+        "/api/v1/evidence",
+        data={"incident_id": incident_id},
+        files={"file": ("screenshot.png", png_bytes, "image/png")},
+        headers=user_1_headers,
+    )
+    assert resp.status_code == 201
+    assert resp.json()["mime_type"] == "image/png"
+
+
+@pytest.mark.asyncio
+async def test_supabase_deletion_ordering_deletes_storage_before_db() -> None:
+    """[DEFECT-02 REGRESSION]: Ensure Supabase repository issues storage deletion before DB row deletion."""
+    from unittest.mock import AsyncMock, patch
+    from app.core.config import Settings
+    from app.database.supabase_client import SupabasePostgrestRepository
+    from app.models.evidence import EvidenceUploadResponse
+    from app.models.incident import IncidentResponse, IncidentStatus, IncidentCategory
+    from datetime import datetime, timezone
+
+    settings = Settings(
+        supabase_url="https://test.supabase.co",
+        supabase_service_role_key="test-key",
+        use_in_memory_adapter=False,
+    )
+    repo = SupabasePostgrestRepository(settings)
+
+    test_user_id = uuid4()
+    test_incident_id = uuid4()
+    test_evidence_id = uuid4()
+
+    mock_incident = IncidentResponse(
+        id=test_incident_id,
+        user_id=test_user_id,
+        title="Test Inc",
+        description="Desc",
+        category=IncidentCategory.THREAT,
+        occurred_at=datetime.now(timezone.utc),
+        status=IncidentStatus.OPEN,
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
+    )
+    mock_evidence = EvidenceUploadResponse(
+        id=test_evidence_id,
+        incident_id=test_incident_id,
+        file_name="evidence.png",
+        mime_type="image/png",
+        size_bytes=100,
+        sha256="a" * 64,
+        uploaded_at=datetime.now(timezone.utc),
+        storage_status="stored",
+    )
+
+    call_order: list[str] = []
+
+    async def mock_get_incident(u_id: UUID, i_id: UUID) -> IncidentResponse:
+        call_order.append("get_incident")
+        return mock_incident
+
+    async def mock_list_evidence(u_id: UUID, i_id: UUID) -> list[EvidenceUploadResponse]:
+        call_order.append("list_evidence")
+        return [mock_evidence]
+
+    async def mock_delete_storage(bucket: str, path: str) -> None:
+        call_order.append("delete_storage_object")
+
+    repo.get_incident = mock_get_incident  # type: ignore
+    repo.list_evidence = mock_list_evidence  # type: ignore
+    repo._delete_storage_object = mock_delete_storage  # type: ignore
+
+    mock_http_resp = AsyncMock()
+    mock_http_resp.status_code = 200
+
+    mock_http_client = AsyncMock()
+    mock_http_client.delete = AsyncMock(return_value=mock_http_resp)
+
+    async def mock_client_delete(endpoint: str, params: dict) -> AsyncMock:
+        call_order.append("db_delete_incident")
+        return mock_http_resp
+
+    mock_http_client.delete.side_effect = mock_client_delete
+
+    class MockClientContext:
+        async def __aenter__(self) -> AsyncMock:
+            return mock_http_client
+        async def __aexit__(self, *args: Any) -> None:
+            pass
+
+    repo._client = lambda: MockClientContext()  # type: ignore
+
+    await repo.delete_incident(test_user_id, test_incident_id)
+
+    # Verify that storage deletion strictly precedes database row deletion
+    assert "delete_storage_object" in call_order
+    assert "db_delete_incident" in call_order
+    storage_idx = call_order.index("delete_storage_object")
+    db_idx = call_order.index("db_delete_incident")
+    assert storage_idx < db_idx, f"Expected storage deletion before DB deletion, got: {call_order}"
+

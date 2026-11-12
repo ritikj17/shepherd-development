@@ -40,6 +40,10 @@ class SupabaseTokenVerifier:
         header = self._safe_get_unverified_header(token)
         algorithm = header.get("alg")
 
+        ALLOWED_ALGORITHMS = {"HS256", "RS256", "ES256"}
+        if not algorithm or algorithm not in ALLOWED_ALGORITHMS:
+            raise AuthenticationError(f"Unsupported or unapproved token algorithm '{algorithm}'.")
+
         options = {
             "verify_signature": True,
             "verify_exp": True,
@@ -49,7 +53,7 @@ class SupabaseTokenVerifier:
 
         claims: dict[str, Any] = {}
         decode_kwargs: dict[str, Any] = {
-            "algorithms": [algorithm] if algorithm else ["HS256", "RS256", "ES256"],
+            "algorithms": [algorithm],
             "options": options,
         }
 
