@@ -48,6 +48,7 @@ optional_routers = [
      - `POST /api/v1/safety-sessions`
      - `GET /api/v1/safety-sessions`
      - `POST /api/v1/safety-sessions/{session_id}/checkin`
+     - `POST /api/v1/safety-sessions/{session_id}/cancel`
 
 2. **Notifications Router:**
    - **Module Path:** `app.notifications.router`

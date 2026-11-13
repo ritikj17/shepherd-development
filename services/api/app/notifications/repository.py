@@ -39,6 +39,12 @@ class BaseNotificationRepository(ABC):
     async def get_alert(self, user_id: UUID, alert_id: UUID) -> Optional[AlertResponse]:
         pass
 
+    @abstractmethod
+    async def has_alert_for_session(
+        self, user_id: UUID, session_id: UUID, message_type: str
+    ) -> bool:
+        pass
+
 
 class InMemoryNotificationRepository(BaseNotificationRepository):
     """In-memory notification repository for testing and offline development."""
@@ -88,6 +94,18 @@ class InMemoryNotificationRepository(BaseNotificationRepository):
         if not alert or alert["user_id"] != user_id:
             return None
         return AlertResponse(**alert)
+
+    async def has_alert_for_session(
+        self, user_id: UUID, session_id: UUID, message_type: str
+    ) -> bool:
+        for a in self.alerts.values():
+            if (
+                a["user_id"] == user_id
+                and a.get("safety_session_id") == session_id
+                and a.get("message_type") == message_type
+            ):
+                return True
+        return False
 
 
 class SupabaseNotificationRepository(BaseNotificationRepository):
@@ -206,6 +224,23 @@ class SupabaseNotificationRepository(BaseNotificationRepository):
                 error_message=r.get("error_message"),
                 created_at=datetime.fromisoformat(r["created_at"].replace("Z", "+00:00")),
             )
+
+    async def has_alert_for_session(
+        self, user_id: UUID, session_id: UUID, message_type: str
+    ) -> bool:
+        async with self._client() as client:
+            resp = await client.get(
+                "/rest/v1/alerts",
+                params={
+                    "user_id": f"eq.{user_id}",
+                    "safety_session_id": f"eq.{session_id}",
+                    "message_type": f"eq.{message_type}",
+                },
+            )
+            if resp.status_code >= 400:
+                return False
+            rows = resp.json()
+            return len(rows) > 0
 
 
 _singleton_notification_repo: Optional[BaseNotificationRepository] = None

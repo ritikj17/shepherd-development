@@ -281,3 +281,89 @@ async def test_safety_session_checkin_cross_user_denied(
         headers=user_2_headers,
     )
     assert chk_resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_cancel_safety_session_success(client: AsyncClient, user_1_headers: dict[str, str]):
+    c_resp = await client.post(
+        "/api/v1/trusted-contacts",
+        json={"name": "Sarah", "contact_method": "email", "contact_value": "sarah@test.com", "consent_confirmed": True},
+        headers=user_1_headers,
+    )
+    contact_id = c_resp.json()["id"]
+
+    future_time = (datetime.now(timezone.utc) + timedelta(hours=2)).isoformat()
+    s_resp = await client.post(
+        "/api/v1/safety-sessions",
+        json={"trusted_contact_id": contact_id, "checkin_deadline": future_time, "consent_confirmed": True},
+        headers=user_1_headers,
+    )
+    session_id = s_resp.json()["id"]
+
+    # Cancel session
+    cancel_resp = await client.post(f"/api/v1/safety-sessions/{session_id}/cancel", headers=user_1_headers)
+    assert cancel_resp.status_code == 200
+    assert cancel_resp.json()["status"] == "cancelled"
+
+    # Attempting to check in to cancelled session is rejected with 400
+    chk_resp = await client.post(
+        f"/api/v1/safety-sessions/{session_id}/checkin",
+        json={"message": "Checking in"},
+        headers=user_1_headers,
+    )
+    assert chk_resp.status_code == 400
+    assert "cancelled" in chk_resp.json()["error"]["message"].lower()
+
+
+@pytest.mark.asyncio
+async def test_cancel_safety_session_already_completed_rejected(client: AsyncClient, user_1_headers: dict[str, str]):
+    c_resp = await client.post(
+        "/api/v1/trusted-contacts",
+        json={"name": "Sarah", "contact_method": "email", "contact_value": "sarah@test.com", "consent_confirmed": True},
+        headers=user_1_headers,
+    )
+    contact_id = c_resp.json()["id"]
+
+    future_time = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
+    s_resp = await client.post(
+        "/api/v1/safety-sessions",
+        json={"trusted_contact_id": contact_id, "checkin_deadline": future_time, "consent_confirmed": True},
+        headers=user_1_headers,
+    )
+    session_id = s_resp.json()["id"]
+
+    # Check in first
+    await client.post(
+        f"/api/v1/safety-sessions/{session_id}/checkin",
+        json={"message": "I arrived"},
+        headers=user_1_headers,
+    )
+
+    # Attempting to cancel checked_in session -> 400
+    cancel_resp = await client.post(f"/api/v1/safety-sessions/{session_id}/cancel", headers=user_1_headers)
+    assert cancel_resp.status_code == 400
+    assert "completed" in cancel_resp.json()["error"]["message"].lower()
+
+
+@pytest.mark.asyncio
+async def test_cancel_safety_session_cross_user_denied(
+    client: AsyncClient, user_1_headers: dict[str, str], user_2_headers: dict[str, str]
+):
+    c_resp = await client.post(
+        "/api/v1/trusted-contacts",
+        json={"name": "Sarah", "contact_method": "email", "contact_value": "sarah@test.com", "consent_confirmed": True},
+        headers=user_1_headers,
+    )
+    contact_id = c_resp.json()["id"]
+
+    future_time = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
+    s_resp = await client.post(
+        "/api/v1/safety-sessions",
+        json={"trusted_contact_id": contact_id, "checkin_deadline": future_time, "consent_confirmed": True},
+        headers=user_1_headers,
+    )
+    session_id = s_resp.json()["id"]
+
+    # User 2 attempts to cancel User 1's session -> 404
+    cancel_resp = await client.post(f"/api/v1/safety-sessions/{session_id}/cancel", headers=user_2_headers)
+    assert cancel_resp.status_code == 404

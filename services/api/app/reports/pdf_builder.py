@@ -3,6 +3,7 @@ import io
 import logging
 from typing import Any, Optional
 from uuid import UUID
+from xml.sax.saxutils import escape
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
@@ -18,6 +19,12 @@ from reportlab.platypus import (
 )
 
 logger = logging.getLogger("shepherd.reports.pdf")
+
+
+def _safe(text: Any, default: str = "") -> str:
+    if text is None:
+        return default
+    return escape(str(text))
 
 
 class NumberedCanvas(io.BytesIO):
@@ -184,17 +191,17 @@ def build_justicebridge_pdf(
     status_str = incident.status.value if hasattr(incident.status, "value") else str(incident.status)
 
     incident_summary_data = [
-        [Paragraph("<b>Title:</b>", body_style), Paragraph(incident.title, body_style)],
-        [Paragraph("<b>Category:</b>", body_style), Paragraph(category_str, body_style)],
-        [Paragraph("<b>Occurred At:</b>", body_style), Paragraph(occurred_str, body_style)],
+        [Paragraph("<b>Title:</b>", body_style), Paragraph(_safe(incident.title), body_style)],
+        [Paragraph("<b>Category:</b>", body_style), Paragraph(_safe(category_str), body_style)],
+        [Paragraph("<b>Occurred At:</b>", body_style), Paragraph(_safe(occurred_str), body_style)],
         [
             Paragraph("<b>Location Context:</b>", body_style),
-            Paragraph(incident.location_description or "None provided by user", body_style),
+            Paragraph(_safe(incident.location_description, "None provided by user"), body_style),
         ],
-        [Paragraph("<b>Status:</b>", body_style), Paragraph(status_str.upper(), body_style)],
+        [Paragraph("<b>Status:</b>", body_style), Paragraph(_safe(status_str.upper()), body_style)],
         [
             Paragraph("<b>Description:</b>", body_style),
-            Paragraph(incident.description.replace("\n", "<br/>"), body_style),
+            Paragraph(_safe(incident.description).replace("\n", "<br/>"), body_style),
         ],
     ]
 
@@ -234,8 +241,8 @@ def build_justicebridge_pdf(
                 )
                 evidence_rows.append(
                     [
-                        Paragraph(ev.file_name, body_style),
-                        Paragraph(ev.mime_type, body_style),
+                        Paragraph(_safe(ev.file_name), body_style),
+                        Paragraph(_safe(ev.mime_type), body_style),
                         Paragraph(size_kb, body_style),
                         Paragraph(up_time, body_style),
                         Paragraph(ev.sha256, mono_style),
@@ -279,11 +286,11 @@ def build_justicebridge_pdf(
             risk_str = f"{risk_score}/100 ({str(risk_level).upper()})" if risk_score is not None else "Insufficient Data"
 
             analysis_rows = [
-                [Paragraph("<b>Status:</b>", body_style), Paragraph(str(getattr(latest, "status", "completed")), body_style)],
-                [Paragraph("<b>Classification Label:</b>", body_style), Paragraph(str(cls_label), body_style)],
-                [Paragraph("<b>Confidence Metric:</b>", body_style), Paragraph(conf_str, body_style)],
-                [Paragraph("<b>Review-Priority Risk:</b>", body_style), Paragraph(risk_str, body_style)],
-                [Paragraph("<b>Model Explanation:</b>", body_style), Paragraph(str(expl), body_style)],
+                [Paragraph("<b>Status:</b>", body_style), Paragraph(_safe(str(getattr(latest, "status", "completed"))), body_style)],
+                [Paragraph("<b>Classification Label:</b>", body_style), Paragraph(_safe(cls_label), body_style)],
+                [Paragraph("<b>Confidence Metric:</b>", body_style), Paragraph(_safe(conf_str), body_style)],
+                [Paragraph("<b>Review-Priority Risk:</b>", body_style), Paragraph(_safe(risk_str), body_style)],
+                [Paragraph("<b>Model Explanation:</b>", body_style), Paragraph(_safe(expl), body_style)],
             ]
 
             indicators = getattr(latest, "indicators", [])
@@ -330,10 +337,10 @@ def build_justicebridge_pdf(
             conf_val = f"{e.confidence:.2f}" if getattr(e, "confidence", None) is not None else "N/A"
             graph_rows.append(
                 [
-                    Paragraph(str(getattr(e, "target", "")), body_style),
-                    Paragraph(str(getattr(e, "relationship", "")), body_style),
-                    Paragraph(conf_val, body_style),
-                    Paragraph(str(getattr(e, "explanation", "")), body_style),
+                    Paragraph(_safe(getattr(e, "target", "")), body_style),
+                    Paragraph(_safe(getattr(e, "relationship", "")), body_style),
+                    Paragraph(_safe(conf_val), body_style),
+                    Paragraph(_safe(getattr(e, "explanation", "")), body_style),
                 ]
             )
         gr_table = Table(graph_rows, colWidths=[120, 140, 52, 220])

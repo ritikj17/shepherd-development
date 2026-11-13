@@ -54,6 +54,7 @@ async def get_alert(
 async def check_overdue_sessions(
     current_user: AuthenticatedUser = Depends(get_current_user),
     safety_repo: BaseSafetyRepository = Depends(get_safety_repository),
+    notif_repo: BaseNotificationRepository = Depends(get_notification_repository),
     service: NotificationService = Depends(get_notification_service),
 ) -> OverdueCheckResponse:
     overdue_sessions = await safety_repo.expire_overdue_sessions(user_id=current_user.id)
@@ -61,6 +62,13 @@ async def check_overdue_sessions(
     details = []
 
     for s in overdue_sessions:
+        # Idempotence: skip if a missed_checkin_reminder has already been dispatched for this session
+        already_sent = await notif_repo.has_alert_for_session(
+            current_user.id, s["id"], "missed_checkin_reminder"
+        )
+        if already_sent:
+            continue
+
         contact = await safety_repo.get_contact(current_user.id, s["trusted_contact_id"])
         if contact:
             alert = await service.dispatch_missed_checkin_reminder(

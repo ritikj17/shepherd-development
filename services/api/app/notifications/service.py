@@ -60,13 +60,18 @@ class NotificationService:
             "No automatic police or emergency service dispatch will occur."
         )
 
-        res = await self.provider.dispatch(
-            channel=channel,
-            recipient=contact_value,
-            subject=subject,
-            body=body,
-            message_type="session_start",
-        )
+        try:
+            res = await self.provider.dispatch(
+                channel=channel,
+                recipient=contact_value,
+                subject=subject,
+                body=body,
+                message_type="session_start",
+            )
+        except Exception as exc:
+            logger.error("Provider dispatch error: %s", exc)
+            from app.notifications.provider import NotificationResult
+            res = NotificationResult(status="failed", error_message=str(exc))
 
         return await self.repo.create_alert(
             user_id=user_id,
@@ -111,13 +116,18 @@ class NotificationService:
             "This safety session is now closed."
         )
 
-        res = await self.provider.dispatch(
-            channel=channel,
-            recipient=contact_value,
-            subject=subject,
-            body=body,
-            message_type="checkin_confirmed",
-        )
+        try:
+            res = await self.provider.dispatch(
+                channel=channel,
+                recipient=contact_value,
+                subject=subject,
+                body=body,
+                message_type="checkin_confirmed",
+            )
+        except Exception as exc:
+            logger.error("Provider dispatch error: %s", exc)
+            from app.notifications.provider import NotificationResult
+            res = NotificationResult(status="failed", error_message=str(exc))
 
         return await self.repo.create_alert(
             user_id=user_id,
@@ -164,13 +174,18 @@ class NotificationService:
             "If you believe there is an immediate emergency, please contact your local emergency services directly."
         )
 
-        res = await self.provider.dispatch(
-            channel=channel,
-            recipient=contact_value,
-            subject=subject,
-            body=body,
-            message_type="missed_checkin_reminder",
-        )
+        try:
+            res = await self.provider.dispatch(
+                channel=channel,
+                recipient=contact_value,
+                subject=subject,
+                body=body,
+                message_type="missed_checkin_reminder",
+            )
+        except Exception as exc:
+            logger.error("Provider dispatch error: %s", exc)
+            from app.notifications.provider import NotificationResult
+            res = NotificationResult(status="failed", error_message=str(exc))
 
         return await self.repo.create_alert(
             user_id=user_id,

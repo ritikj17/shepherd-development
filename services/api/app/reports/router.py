@@ -58,11 +58,24 @@ async def download_report_pdf(
 
 @router.get(
     "/reports",
+    response_model=list[ReportGenerateResponse],
     status_code=status.HTTP_200_OK,
     summary="List generated JusticeBridge reports for authenticated user",
 )
 async def list_reports(
     current_user: AuthenticatedUser = Depends(get_current_user),
     service: ReportService = Depends(get_report_service),
-) -> list[dict]:
-    return await service.list_reports(current_user.id)
+) -> list[ReportGenerateResponse]:
+    reports = await service.list_reports(current_user.id)
+    return [
+        ReportGenerateResponse(
+            report_id=r["id"],
+            incident_id=r["incident_id"],
+            status=r["status"],
+            file_name=r.get("file_name") or f"incident-report-{str(r['incident_id'])[:8]}.pdf",
+            download_url=f"/api/v1/reports/{r['id']}/download",
+            generated_at=r["generated_at"],
+            expires_at=r.get("expires_at"),
+        )
+        for r in reports
+    ]

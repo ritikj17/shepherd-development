@@ -69,6 +69,10 @@ class BaseSafetyRepository(ABC):
         pass
 
     @abstractmethod
+    async def cancel_session(self, user_id: UUID, session_id: UUID) -> SafetySessionResponse:
+        pass
+
+    @abstractmethod
     async def expire_overdue_sessions(self, user_id: Optional[UUID] = None) -> list[dict]:
         pass
 
@@ -227,13 +231,34 @@ class InMemorySafetyRepository(BaseSafetyRepository):
             checked_in_at=now,
         )
 
+    async def cancel_session(self, user_id: UUID, session_id: UUID) -> SafetySessionResponse:
+        session = await self.get_session(user_id, session_id)
+        if not session:
+            raise NotFoundError("Safety session not found.")
+
+        if session["status"] == "checked_in":
+            raise BadRequestError("Cannot cancel a completed safety session.")
+
+        now = datetime.now(timezone.utc)
+        session["status"] = "cancelled"
+        session["cancelled_at"] = now
+        session["updated_at"] = now
+        return SafetySessionResponse(
+            id=session["id"],
+            trusted_contact_id=session["trusted_contact_id"],
+            incident_id=session["incident_id"],
+            status="cancelled",
+            checkin_deadline=session["checkin_deadline"],
+            created_at=session["created_at"],
+        )
+
     async def expire_overdue_sessions(self, user_id: Optional[UUID] = None) -> list[dict]:
         now = datetime.now(timezone.utc)
         expired_sessions = []
         for s in self.sessions.values():
             if user_id is not None and s["user_id"] != user_id:
                 continue
-            if s["status"] == "active" and s["checkin_deadline"] <= now:
+            if s["status"] in ("active", "expired") and s["checkin_deadline"] <= now and s["checked_in_at"] is None and s["cancelled_at"] is None:
                 s["status"] = "expired"
                 s["updated_at"] = now
                 expired_sessions.append(s)
@@ -481,6 +506,33 @@ class SupabaseSafetyRepository(BaseSafetyRepository):
                 id=session["id"],
                 status="checked_in",
                 checked_in_at=now,
+            )
+
+    async def cancel_session(self, user_id: UUID, session_id: UUID) -> SafetySessionResponse:
+        session = await self.get_session(user_id, session_id)
+        if not session:
+            raise NotFoundError("Safety session not found.")
+
+        if session["status"] == "checked_in":
+            raise BadRequestError("Cannot cancel a completed safety session.")
+
+        now = datetime.now(timezone.utc)
+        async with self._client() as client:
+            resp = await client.patch(
+                "/rest/v1/safety_sessions",
+                params={"id": f"eq.{session_id}", "user_id": f"eq.{user_id}"},
+                json={"status": "cancelled", "cancelled_at": now.isoformat(), "updated_at": now.isoformat()},
+            )
+            if resp.status_code >= 400:
+                logger.error("Supabase cancel_session failed: %s %s", resp.status_code, resp.text)
+                raise UpstreamServiceError("Failed to cancel safety session.")
+            return SafetySessionResponse(
+                id=session["id"],
+                trusted_contact_id=session["trusted_contact_id"],
+                incident_id=session["incident_id"],
+                status="cancelled",
+                checkin_deadline=session["checkin_deadline"],
+                created_at=session["created_at"],
             )
 
     async def expire_overdue_sessions(self, user_id: Optional[UUID] = None) -> list[dict]:

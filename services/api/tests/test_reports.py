@@ -189,3 +189,51 @@ async def test_list_reports_isolation(
     r2 = await client.get("/api/v1/reports", headers=user_2_headers)
     assert r2.status_code == 200
     assert len(r2.json()) == 0
+
+
+@pytest.mark.asyncio
+async def test_generate_report_with_xml_special_characters(client: AsyncClient, user_1_headers: dict[str, str]):
+    # Incident containing XML characters (<, >, &, ", ') that would crash raw ReportLab
+    inc_resp = await client.post(
+        "/api/v1/incidents",
+        json={
+            "title": "<urgent> & critical threats!",
+            "description": "Attacker wrote: 'x < 5 & y > 10' <script>alert(1)</script>",
+            "category": "threat",
+            "occurred_at": datetime.now(timezone.utc).isoformat(),
+            "location_description": "Chat <room> & forum",
+        },
+        headers=user_1_headers,
+    )
+    assert inc_resp.status_code == 201
+    incident_id = inc_resp.json()["id"]
+
+    rep_resp = await client.post(
+        f"/api/v1/reports/{incident_id}",
+        json={"include_evidence_index": True, "include_analysis": True},
+        headers=user_1_headers,
+    )
+    assert rep_resp.status_code == 200
+    download_url = rep_resp.json()["download_url"]
+
+    # Download and verify valid PDF bytes
+    dl_resp = await client.get(download_url, headers=user_1_headers)
+    assert dl_resp.status_code == 200
+    assert dl_resp.content.startswith(b"%PDF-")
+
+
+@pytest.mark.asyncio
+async def test_report_generation_nonexistent_incident_fails(client: AsyncClient, user_1_headers: dict[str, str]):
+    fake_id = str(uuid4())
+    rep_resp = await client.post(
+        f"/api/v1/reports/{fake_id}",
+        json={"include_evidence_index": True, "include_analysis": True},
+        headers=user_1_headers,
+    )
+    assert rep_resp.status_code == 404
+    assert rep_resp.json()["error"]["code"] == "NOT_FOUND"
+
+    # Verify no report was persisted
+    r = await client.get("/api/v1/reports", headers=user_1_headers)
+    assert r.status_code == 200
+    assert len(r.json()) == 0

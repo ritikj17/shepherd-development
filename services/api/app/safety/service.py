@@ -147,3 +147,13 @@ class SafetyService:
                     logger.error("Failed to dispatch checkin notification: %s", exc)
 
         return res
+
+    async def cancel_session(self, user_id: UUID, session_id: UUID) -> SafetySessionResponse:
+        session = await self.safety_repo.get_session(user_id, session_id)
+        if not session:
+            raise NotFoundError("Safety session not found.")
+
+        if session["status"] == "checked_in":
+            raise BadRequestError("Cannot cancel a completed safety session.")
+
+        return await self.safety_repo.cancel_session(user_id, session_id)

@@ -151,3 +151,46 @@ async def test_overdue_check_dispatches_reminders(
     reminder_alerts = [a for a in a_resp.json()["items"] if a["message_type"] == "missed_checkin_reminder"]
     assert len(reminder_alerts) >= 1
     assert reminder_alerts[0]["status"] == "simulated"
+
+    # Repeated scan should be idempotent and NOT create a second reminder alert
+    check_resp2 = await client.post("/api/v1/notifications/check-overdue", headers=user_1_headers)
+    assert check_resp2.status_code == 200
+    assert check_resp2.json()["reminders_dispatched_count"] == 0
+
+    a_resp2 = await client.get("/api/v1/alerts", headers=user_1_headers)
+    reminder_alerts2 = [a for a in a_resp2.json()["items"] if a["message_type"] == "missed_checkin_reminder"]
+    assert len(reminder_alerts2) == len(reminder_alerts)
+
+
+@pytest.mark.asyncio
+async def test_notification_provider_exception_logged_as_failed_alert(
+    client: AsyncClient, user_1_headers: dict[str, str]
+):
+    from unittest.mock import AsyncMock, patch
+    from app.notifications.service import NotificationService
+
+    # Create contact
+    c_resp = await client.post(
+        "/api/v1/trusted-contacts",
+        json={"name": "Failing Provider Contact", "contact_method": "email", "contact_value": "fail@test.com", "consent_confirmed": True},
+        headers=user_1_headers,
+    )
+    contact_id = c_resp.json()["id"]
+
+    # Patch provider.dispatch to raise a simulated connection error
+    with patch("app.notifications.provider.MockNotificationProvider.dispatch", side_effect=RuntimeError("SMTP connection timed out")):
+        future_time = (datetime.now(timezone.utc) + timedelta(hours=2)).isoformat()
+        s_resp = await client.post(
+            "/api/v1/safety-sessions",
+            json={"trusted_contact_id": contact_id, "checkin_deadline": future_time, "consent_confirmed": True},
+            headers=user_1_headers,
+        )
+        assert s_resp.status_code == 201
+
+        # Alert should be recorded as "failed" with the error message
+        a_resp = await client.get("/api/v1/alerts", headers=user_1_headers)
+        assert a_resp.status_code == 200
+        alerts = a_resp.json()["items"]
+        assert len(alerts) >= 1
+        assert alerts[0]["status"] == "failed"
+        assert "SMTP connection timed out" in alerts[0]["error_message"]

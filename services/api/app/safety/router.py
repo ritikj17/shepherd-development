@@ -121,3 +121,17 @@ async def checkin_safety_session(
     service: SafetyService = Depends(get_safety_service),
 ) -> SafetySessionCheckinResponse:
     return await service.checkin(current_user.id, session_id, data)
+
+
+@router.post(
+    "/safety-sessions/{session_id}/cancel",
+    response_model=SafetySessionResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Cancel an active safety session",
+)
+async def cancel_safety_session(
+    session_id: UUID,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    service: SafetyService = Depends(get_safety_service),
+) -> SafetySessionResponse:
+    return await service.cancel_session(current_user.id, session_id)
