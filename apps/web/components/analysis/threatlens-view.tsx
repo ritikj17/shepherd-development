@@ -254,7 +254,13 @@ export function ThreatLensView() {
                     ) : null}
                   </div>
 
-                  {evidenceQuery.loading && !evidenceQuery.data ? (
+                  {evidenceQuery.error ? (
+                    <ErrorState
+                      title="Evidence could not be loaded"
+                      message={evidenceQuery.error}
+                      onRetry={evidenceQuery.refresh}
+                    />
+                  ) : evidenceQuery.loading && !evidenceQuery.data ? (
                     <ListSkeleton rows={2} />
                   ) : evidence.length === 0 ? (
                     <p className="rounded-md border border-dashed border-border bg-muted/25 px-3 py-3 text-[11px] leading-relaxed text-muted-foreground">
@@ -322,7 +328,13 @@ export function ThreatLensView() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                {analysesQuery.loading && !analysesQuery.data ? (
+                {analysesQuery.error ? (
+                  <ErrorState
+                    title="Analysis history could not be loaded"
+                    message={analysesQuery.error}
+                    onRetry={analysesQuery.refresh}
+                  />
+                ) : analysesQuery.loading && !analysesQuery.data ? (
                   <ListSkeleton rows={2} />
                 ) : analyses.length === 0 ? (
                   <p className="text-xs text-muted-foreground">
@@ -363,7 +375,13 @@ export function ThreatLensView() {
           </div>
 
           <div>
-            {selectedAnalysis ? (
+            {analysesQuery.error && !analysesQuery.data ? (
+              <ErrorState
+                title="Analysis results could not be loaded"
+                message={analysesQuery.error}
+                onRetry={analysesQuery.refresh}
+              />
+            ) : selectedAnalysis ? (
               <AnalysisResult
                 analysis={selectedAnalysis}
                 incidentDescription={incident?.description}

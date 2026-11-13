@@ -53,6 +53,7 @@ import { RiskMeter } from "@/components/shared/risk-meter";
 import { IncidentTimeline } from "@/components/incidents/incident-timeline";
 import { deleteIncident, updateIncident } from "@/lib/api";
 import { errorMessage } from "@/lib/api/client";
+import { isMockApiEnabled } from "@/lib/api/config";
 import { useAsyncData } from "@/lib/hooks/use-async-data";
 import { loadIncidentDetail } from "@/lib/incidents/detail";
 import { formatBytes, formatDateTime, formatRelative, shortHash } from "@/lib/utils/format";
@@ -399,7 +400,7 @@ export function IncidentDetailView() {
                         explanation={analysis.risk.explanation}
                       />
                     ) : null}
-                    <AiDisclosure variant="analysis" sample />
+                    <AiDisclosure variant="analysis" sample={isMockApiEnabled} />
                   </CardContent>
                 </Card>
               ))

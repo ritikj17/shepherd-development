@@ -54,7 +54,10 @@ import { EmptyState, ErrorState } from "@/components/shared/states";
 import { ListSkeleton } from "@/components/shared/loading-states";
 import { PageHeader } from "@/components/shared/page-header";
 import { MockDataBadge } from "@/components/shared/demo-notices";
-import { SafetyStatusBadge } from "@/components/shared/status-badges";
+import {
+  SafetyStatusBadge,
+  displaySessionStatus,
+} from "@/components/shared/status-badges";
 import {
   checkInToSession,
   createSafetySession,
@@ -169,7 +172,9 @@ export function SafeCircleView() {
   );
   const sessions = sessionsQuery.data?.items ?? [];
   const incidents = incidentsQuery.data?.items ?? [];
-  const activeSession = sessions.find((session) => session.status === "active");
+  const activeSession = sessions.find(
+    (session) => displaySessionStatus(session) === "active",
+  );
 
   React.useEffect(() => {
     if (contactDialogOpen) {

@@ -50,7 +50,11 @@ import {
 import { errorMessage, isApiRequestError } from "@/lib/api/client";
 import { isMockApiEnabled } from "@/lib/api/config";
 import { useAsyncData } from "@/lib/hooks/use-async-data";
-import type { Evidence, HashVerification } from "@/lib/types/api";
+import type {
+  Evidence,
+  EvidenceStorageStatus,
+  HashVerification,
+} from "@/lib/types/api";
 import { formatBytes, formatDateTime, pluralize, shortHash } from "@/lib/utils/format";
 import { validateEvidenceFile } from "@/lib/validation/evidence";
 
@@ -187,6 +191,14 @@ export function EvidenceView() {
 
   const incidents = incidentsQuery.data?.items ?? [];
   const evidence = evidenceQuery.data?.items ?? [];
+  const aggregateStatus: EvidenceStorageStatus | null =
+    evidence.length === 0
+      ? null
+      : evidence.some((item) => item.storage_status === "failed")
+        ? "failed"
+        : evidence.some((item) => item.storage_status === "pending")
+          ? "pending"
+          : "stored";
   const totalBytes = evidence.reduce((total, item) => total + item.size_bytes, 0);
   const selectedIncident = incidents.find((incident) => incident.id === incidentId);
 
@@ -444,7 +456,9 @@ export function EvidenceView() {
                   Metadata only. Private storage URLs are never displayed.
                 </CardDescription>
               </div>
-              <EvidenceStatusBadge status="stored" />
+              {aggregateStatus ? (
+                <EvidenceStatusBadge status={aggregateStatus} />
+              ) : null}
             </CardHeader>
             <CardContent>
               {evidenceQuery.error ? (

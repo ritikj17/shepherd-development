@@ -450,8 +450,10 @@ export function JusticeBridgeView() {
                   ) : (
                     <span className="mt-0.5 size-3.5 shrink-0 rounded-full border border-border" />
                   )}
-                  Evidence index with {pluralize(evidence.length, "file")} —
-                  metadata and hashes only.
+                  {evidenceQuery.error
+                    ? "Evidence index could not be loaded"
+                    : `Evidence index with ${pluralize(evidence.length, "file")}`}{" "}
+                  — metadata and hashes only.
                 </p>
                 <p className="flex items-start gap-2">
                   {includeAnalysis ? (
@@ -459,8 +461,9 @@ export function JusticeBridgeView() {
                   ) : (
                     <span className="mt-0.5 size-3.5 shrink-0 rounded-full border border-border" />
                   )}
-                  {pluralize(analyses.length, "analysis result")} with their
-                  limitations.
+                  {analysesQuery.error
+                    ? "Analysis results could not be loaded."
+                    : `${pluralize(analyses.length, "analysis result")} with their limitations.`}
                 </p>
                 <p className="flex items-start gap-2">
                   <Lock className="mt-0.5 size-3.5 shrink-0 text-primary" />
@@ -472,6 +475,26 @@ export function JusticeBridgeView() {
           </div>
 
           <div className="space-y-4">
+            {evidenceQuery.error || analysesQuery.error ? (
+              <ErrorState
+                title="Some report inputs could not be loaded"
+                message={[
+                  evidenceQuery.error
+                    ? `Evidence: ${evidenceQuery.error}`
+                    : null,
+                  analysesQuery.error
+                    ? `Analysis: ${analysesQuery.error}`
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+                onRetry={() => {
+                  if (evidenceQuery.error) evidenceQuery.refresh();
+                  if (analysesQuery.error) analysesQuery.refresh();
+                }}
+              />
+            ) : null}
+
             {generating ? (
               <Card>
                 <CardContent className="flex min-h-[280px] flex-col items-center justify-center gap-3 p-6 text-center">
@@ -622,7 +645,9 @@ export function JusticeBridgeView() {
                             Evidence
                           </p>
                           <p className="mt-0.5 text-sm font-medium">
-                            {pluralize(evidence.length, "file")}
+                            {evidenceQuery.error
+                              ? "Unavailable"
+                              : pluralize(evidence.length, "file")}
                           </p>
                         </div>
                         <div className="rounded-md border border-border px-3 py-2">
@@ -630,7 +655,9 @@ export function JusticeBridgeView() {
                             Analyses
                           </p>
                           <p className="mt-0.5 text-sm font-medium">
-                            {pluralize(analyses.length, "result")}
+                            {analysesQuery.error
+                              ? "Unavailable"
+                              : pluralize(analyses.length, "result")}
                           </p>
                         </div>
                       </div>
