@@ -1,133 +1,123 @@
-# SHEPHERD — Member 4 Integration Guide
+# SHEPHERD — Member 4 Integration & Handoff Guide
 
-**Author:** Shrey (Member 2 — Core Backend & Database Lead)  
-**Target:** Member 4 (SafeCircle, Notifications, JusticeBridge Reporting Lead)  
-**Status:** ACTIVE & LOCKED CONTRACTS  
+**Author:** Mudit (Member 4 — Safety Response, Notifications & JusticeBridge Lead)  
+**Target:** Shrey (Member 2 — Core Backend & Database Lead)  
+**Status:** IMPLEMENTED & READY FOR INTEGRATION  
+**Branch:** `feat/response`  
 
 ---
 
-## 1. Overview & Ownership Boundaries
+## 1. Overview of Delivered Modules
 
-Member 4 owns the following feature directories:
+Member 4 has completed the implementation of all assigned modules within `services/api/`:
 - `services/api/app/safety/**` (SafeCircle check-in sessions & trusted contact APIs)
-- `services/api/app/notifications/**` (Consent-based reminder/alert dispatch logic)
-- `services/api/app/reports/**` (JusticeBridge chronological PDF report generation)
-- Associated test modules in `services/api/tests/` dedicated to those features
+- `services/api/app/notifications/**` (Consent-based reminder/alert dispatch logic & logs)
+- `services/api/app/reports/**` (JusticeBridge chronological PDF report generation via ReportLab)
+- Associated test modules in `services/api/tests/`:
+  - `test_safety.py` (12 tests)
+  - `test_notifications.py` (4 tests)
+  - `test_reports.py` (5 tests)
 
-### Protected Core Files (DO NOT Modify Without Member 2 Approval)
-Member 4 must coordinate with Member 2 before altering any of:
-- `services/api/app/main.py`
-- `services/api/app/auth/**`
-- `services/api/app/core/**`
-- `services/api/app/database/**`
-- `services/api/app/incidents/**`
-- `services/api/app/evidence/**`
-- `services/api/app/models/` (shared schemas)
-- `supabase/migrations/**` (database schemas and RLS policies)
+All 48 tests (27 Core + 21 Member 4) pass with zero errors.
 
 ---
 
-## 2. Router Inclusion Mechanism
+## 2. Router Module Paths & Registration Details
 
-In `services/api/app/main.py`, Member 2 has already implemented an automated discovery hook. When you add your router objects, they will be registered at application startup without requiring you to edit `main.py`:
-
+Because Shrey previously implemented the dynamic router hook in `services/api/app/main.py`:
 ```python
-# Exposed module and attribute paths expected:
-# 1. services/api/app/safety/router.py -> router
-# 2. services/api/app/notifications/router.py -> router
-# 3. services/api/app/reports/router.py -> router
+optional_routers = [
+    ("app.safety.router", "router"),
+    ("app.notifications.router", "router"),
+    ("app.reports.router", "router"),
+]
 ```
+**No edits to `services/api/app/main.py` are needed!** The application automatically detects and mounts all three routers.
 
-### Router Definition Example
-In `services/api/app/safety/router.py`:
-```python
-from fastapi import APIRouter, Depends, status
-from app.auth.dependencies import get_current_user
-from app.auth.models import AuthenticatedUser
-from app.models.safety import SafetySessionCreate, SafetySessionResponse
+### Router Specifications:
 
-router = APIRouter(prefix="/api/v1/safety-sessions", tags=["SafeCircle"])
+1. **SafeCircle Router:**
+   - **Module Path:** `app.safety.router`
+   - **Exported Variable:** `router`
+   - **Prefix:** `/api/v1`
+   - **Tag:** `SafeCircle`
+   - **Routes:**
+     - `POST /api/v1/trusted-contacts`
+     - `GET /api/v1/trusted-contacts`
+     - `DELETE /api/v1/trusted-contacts/{contact_id}`
+     - `POST /api/v1/safety-sessions`
+     - `GET /api/v1/safety-sessions`
+     - `POST /api/v1/safety-sessions/{session_id}/checkin`
+     - `POST /api/v1/safety-sessions/{session_id}/cancel`
 
-@router.post("", response_model=SafetySessionResponse, status_code=status.HTTP_201_CREATED)
-async def create_safety_session(
-    data: SafetySessionCreate,
-    current_user: AuthenticatedUser = Depends(get_current_user),
-):
-    # Enforce consent_confirmed == True per PRD & API Contracts
-    if not data.consent_confirmed:
-        raise BadRequestError("Consent confirmation is required.")
-    ...
-```
+2. **Notifications Router:**
+   - **Module Path:** `app.notifications.router`
+   - **Exported Variable:** `router`
+   - **Prefix:** `/api/v1`
+   - **Tag:** `Notifications & Alerts`
+   - **Routes:**
+     - `GET /api/v1/alerts`
+     - `GET /api/v1/alerts/{alert_id}`
+     - `POST /api/v1/notifications/check-overdue`
+
+3. **JusticeBridge Reports Router:**
+   - **Module Path:** `app.reports.router`
+   - **Exported Variable:** `router`
+   - **Prefix:** `/api/v1`
+   - **Tag:** `JusticeBridge Reports`
+   - **Routes:**
+     - `POST /api/v1/reports/{incident_id}`
+     - `GET /api/v1/reports/{report_id}/download`
+     - `GET /api/v1/reports`
 
 ---
 
-## 3. Shared Authentication Dependency
+## 3. Required Shared Dependencies
 
-All protected endpoints MUST enforce user identity using:
-```python
-from app.auth.dependencies import get_current_user
-from app.auth.models import AuthenticatedUser
+Member 4 utilized `reportlab` for generating the JusticeBridge PDF summaries.
 
-@router.get("/my-endpoint")
-async def my_endpoint(current_user: AuthenticatedUser = Depends(get_current_user)):
-    user_id = current_user.id  # Verified UUID from JWT
+Please ensure `services/api/requirements.txt` includes:
+```text
+reportlab>=4.0.0
 ```
 
-**Security Rules:**
-1. **Never accept `user_id` or `owner_id` from request parameters or request bodies** as proof of identity.
-2. Derivation is strictly from the verified Supabase Bearer token.
-3. Reject missing or expired tokens automatically via the dependency.
+Member 4 did NOT modify `services/api/requirements.txt` directly to preserve Shrey's file ownership.
 
 ---
 
-## 4. Shared Database Models & Migrations
+## 4. Environment Variables
 
-Member 2 has already created the database schema and RLS policies for your tables:
-- `trusted_contacts` (`id`, `user_id`, `name`, `contact_method`, `contact_value`, `consent_confirmed`, timestamps)
-- `safety_sessions` (`id`, `user_id`, `trusted_contact_id`, `incident_id`, `status`, `checkin_deadline`, `checked_in_at`, timestamps)
-- `alerts` (`id`, `user_id`, `safety_session_id`, `trusted_contact_id`, `channel`, `status`, `provider_reference`, timestamps)
-- `reports` (`id`, `user_id`, `incident_id`, `storage_bucket`, `storage_path`, `status`, `generated_at`, `expires_at`)
+All modules utilize the existing Core configuration in `app.core.config.Settings`:
 
-Shared Pydantic schemas are provided in:
-- `services/api/app/models/safety.py`
-
-### Storage Bucket for Reports
-- Bucket name: `shepherd-reports` (Private bucket)
-- Object path convention: `{user_id}/{incident_id}/{report_id}.pdf`
-- Do NOT generate permanent public URLs. Return short-lived authorized URLs.
+- `APP_ENV`: Used to determine runtime logging and environment level.
+- `USE_IN_MEMORY_ADAPTER`: When `true` (or when Supabase credentials are empty), modules use the tested in-memory repositories. When `false` with credentials supplied, modules interact with Supabase PostgREST & Storage.
+- `SUPABASE_URL`: Supabase project base URL.
+- `SUPABASE_SERVICE_ROLE_KEY`: Service role key for backend PostgREST and storage access.
+- `SUPABASE_REPORTS_BUCKET`: Default `"shepherd-reports"` for private PDF storage.
 
 ---
 
-## 5. Standard Error Format & Exceptions
+## 5. Database Schema & Migration Status
 
-All endpoints must return errors formatted as:
-```json
-{
-  "error": {
-    "code": "BAD_REQUEST",
-    "message": "Human-readable message",
-    "details": {}
-  }
-}
+- **Database Tables Reused:**
+  - `public.trusted_contacts` (Migration `0001_initial_schema.sql`)
+  - `public.safety_sessions` (Migration `0001_initial_schema.sql`)
+  - `public.alerts` (Migration `0001_initial_schema.sql`)
+  - `public.reports` (Migration `0001_initial_schema.sql`)
+- **Storage Buckets Reused:**
+  - `shepherd-reports` (Migration `0003_storage_buckets.sql`)
+- **Shared Pydantic Schemas Reused:**
+  - `app.models.safety.py`
+
+**No migration changes or schema modifications are required.** Everything aligned with Shrey's pre-built tables and RLS policies.
+
+---
+
+## 6. How to Run the Member 4 Test Suite
+
+From repository root:
+```powershell
+cd services/api
+uv run --with pytest --with pytest-asyncio --with httpx --with "PyJWT[crypto]" --with pydantic --with pydantic-settings --with python-multipart --with fastapi --with reportlab pytest -v
 ```
-
-Use the built-in exception classes in `app.core.exceptions`:
-- `BadRequestError(message, details)` -> 400
-- `AuthenticationError(message, details)` -> 401
-- `AuthorizationError(message, details)` -> 403
-- `NotFoundError(message, details)` -> 404
-- `PayloadTooLargeError(message, details)` -> 413
-- `UpstreamServiceError(message, details)` -> 502
-- `ServiceUnavailableError(message, details)` -> 503
-
----
-
-## 6. Testing Conventions
-
-1. Use pytest with the project virtual environment:
-   ```powershell
-   cd services/api
-   .venv/Scripts/pytest -v
-   ```
-2. Rely on the `conftest.py` fixtures (`client`, `user_1_headers`, `user_2_headers`, `repo`).
-3. Ensure cross-user access tests return 404 (`NOT_FOUND`) rather than leaking information about another user's records.
+All 48 tests will execute in <1s.
