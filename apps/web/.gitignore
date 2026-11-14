@@ -1,0 +1,14 @@
+# Next.js build output
+.next/
+out/
+
+# TypeScript incremental build cache
+*.tsbuildinfo
+
+# Local environment overrides
+.env
+.env.*
+!.env.example
+
+# Test output
+coverage/
