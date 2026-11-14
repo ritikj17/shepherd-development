@@ -1,1 +1,1 @@
-# services/api/app/__init__.py
+"""SHEPHERD Core API package."""

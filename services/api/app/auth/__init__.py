@@ -1,1 +1,1 @@
-# services/api/app/auth/__init__.py
+"""Authentication models and dependencies."""
