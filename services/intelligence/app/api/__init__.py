@@ -7,6 +7,7 @@ from ..schemas.classify_response import ClassifyResponse
 from ..schemas.graph import GraphResponse
 from ..ocr.ocr import perform_ocr
 from ..classifiers.deterministic import classify_text
+from ..classifiers.gemini_classifier import classify_with_gemini
 from ..graph.builder import build_incident_graph
 from ..risk.compute import compute_risk
 from ..dependencies import verify_service_token
@@ -38,18 +39,30 @@ async def analyze(request: AnalyzeRequest):
     # Combine user-provided incident description with OCR text for classification
     desc = (request.description or "").strip()
     text_to_classify = f"{desc} {combined_text}".strip()
-    classification: ClassificationResult = classify_text(text_to_classify)
-    # Compute risk factors based on description, OCR, classification, evidence count
-    risk = compute_risk(request.description, request.evidence, ocr_results, classification)
+
+    # Try Gemini AI classification first
+    gemini_res = classify_with_gemini(text_to_classify) if text_to_classify else None
+    if gemini_res:
+        classification, gemini_factors, limitations = gemini_res
+    else:
+        classification = classify_text(text_to_classify)
+        gemini_factors = {}
+        limitations = [
+            "AI-assisted classification is informational and should not be treated as a definitive legal verdict.",
+            "Assessments reflect reported details and cannot verify uncorroborated statements."
+        ]
+
+    # Compute risk factors based on description, OCR, classification, evidence count, and Gemini factors
+    risk = compute_risk(request.description, request.evidence, ocr_results, classification, gemini_factors=gemini_factors)
     # Use first OCR result as contract‑required top‑level OCR field
-    ocr_field = ocr_results[0] if ocr_results else {"status": "not_applicable"}
+    ocr_field = ocr_results[0] if ocr_results else {"status": "not_applicable", "text_available": False}
     return AnalyzeResponse(
         incident_id=request.incident_id,
         classification=classification,
         indicators=classification.indicators,
         ocr=ocr_field,
         risk=risk,
-        limitations=[]
+        limitations=limitations
     )
 
 @router.post("/classify-text", response_model=ClassifyResponse, dependencies=[auth_dep])

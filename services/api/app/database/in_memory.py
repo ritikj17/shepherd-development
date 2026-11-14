@@ -287,6 +287,10 @@ class InMemoryRepository(BaseRepository):
         analysis_id = analysis_data.get("analysis_id") or uuid4()
         now = datetime.now(timezone.utc)
 
+        ocr_data = dict(analysis_data.get("ocr") or {"status": "not_applicable"})
+        if "text_available" not in ocr_data or not ocr_data["text_available"]:
+            ocr_data["text_available"] = bool(ocr_data.get("extracted_text"))
+
         raw_record = {
             "id": analysis_id,
             "incident_id": incident_id,
@@ -295,7 +299,7 @@ class InMemoryRepository(BaseRepository):
             "classification": analysis_data["classification"],
             "indicators": analysis_data.get("indicators", []),
             "risk": analysis_data.get("risk", {"explanation": "N/A"}),
-            "ocr": analysis_data.get("ocr", {"status": "not_applicable", "text_available": False}),
+            "ocr": ocr_data,
             "limitations": analysis_data.get("limitations", []),
             "created_at": now,
         }

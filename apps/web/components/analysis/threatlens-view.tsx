@@ -88,6 +88,12 @@ export function ThreatLensView() {
   const selectedAnalysis =
     analyses.find((item) => item.analysis_id === selectedAnalysisId) ?? analyses[0];
 
+  React.useEffect(() => {
+    if (evidence.length > 0) {
+      setSelectedEvidence(new Set(evidence.map((item) => item.id)));
+    }
+  }, [effectiveIncidentId, evidence.length]);
+
   const toggleEvidence = (id: string) => {
     setSelectedEvidence((current) => {
       const next = new Set(current);
