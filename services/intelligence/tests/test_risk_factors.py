@@ -32,3 +32,48 @@ def test_digital_exposure_factor_unavailable_when_no_context():
     assert result["score"] == 0
     assert result["level"] == "insufficient_data"
     assert "pending clarification from Shrey" in result["explanation"]
+
+
+def test_threat_indicator_dict_matching_sets_t_factor():
+    """Verify that dict indicators matching threat keywords successfully set T factor."""
+    indicators = [
+        {"name": "threat", "description": "Matched pattern 'threatens to kill' in context: 'threatens to kill me'"}
+    ]
+    classification = make_classification("threat", indicators=indicators)
+    result = compute_risk(description="violent threat", evidence=[], ocr_results=[], classification=classification)
+
+    t_factor = next(f for f in result["factors"] if f["name"] == "T")
+    assert t_factor["value"] == 80
+    assert "(unavailable)" not in t_factor["explanation"]
+
+
+def test_threat_indicator_dict_non_matching():
+    """Verify that non-threat dict indicators keep T factor unavailable."""
+    indicators = [
+        {"name": "general_harassment", "description": "unwanted contact without violence"}
+    ]
+    classification = make_classification("general_harassment", indicators=indicators)
+    result = compute_risk(description="hello", evidence=[], ocr_results=[], classification=classification)
+
+    t_factor = next(f for f in result["factors"] if f["name"] == "T")
+    assert t_factor["value"] == 0
+    assert "(unavailable)" in t_factor["explanation"]
+
+
+def test_threat_indicator_malformed_and_edge_cases():
+    """Verify resilience against malformed indicators (None, empty dict, string, ints)."""
+    malformed_indicators = [
+        None,
+        {},
+        {"name": None, "description": None},
+        {"name": "threat", "description": None},
+        12345,
+        "explicit threat of violent attack",
+    ]
+    classification = make_classification("threat", indicators=malformed_indicators)
+    # Should not raise AttributeError or any exception
+    result = compute_risk(description="some text", evidence=[], ocr_results=[], classification=classification)
+    t_factor = next(f for f in result["factors"] if f["name"] == "T")
+    # "threat" name and string matched the keyword
+    assert t_factor["value"] == 80
+

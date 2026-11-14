@@ -166,3 +166,62 @@ def test_graph_endpoint():
     # Default stub returns empty nodes/edges
     assert data["nodes"] == []
     assert data["edges"] == []
+
+
+# ---------- Regression tests for Issue 1 & Issue 2 ----------
+
+def test_analyze_description_only_influences_classification():
+    """Verify description is classified even when evidence is empty."""
+    payload = {
+        "incident_id": "00000000-0000-0000-0000-000000000099",
+        "description": "He threatens to kill me with violent action if I leave",
+        "evidence": [],
+    }
+    response = client.post(
+        "/api/v1/analyze",
+        json=payload,
+        headers={"Authorization": "Bearer test-token"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["classification"]["label"] == "threat"
+    assert data["classification"]["confidence"] > 0
+    assert len(data["indicators"]) > 0
+
+
+def test_threat_matching_request_returns_valid_200_not_500():
+    """Regression test: Ensure threat indicator matches do not crash compute_risk with AttributeError."""
+    payload = {
+        "incident_id": "00000000-0000-0000-0000-000000000098",
+        "description": "Subject is stalking online and monitoring my social media accounts daily",
+        "evidence": [],
+    }
+    response = client.post(
+        "/api/v1/analyze",
+        json=payload,
+        headers={"Authorization": "Bearer test-token"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["classification"]["label"] == "cyberstalking"
+    assert "risk" in data
+    assert data["risk"]["level"] == "insufficient_data"
+
+
+def test_analyze_empty_inputs_safe():
+    """Verify empty description and empty evidence handled gracefully."""
+    payload = {
+        "incident_id": "00000000-0000-0000-0000-000000000097",
+        "description": "",
+        "evidence": [],
+    }
+    response = client.post(
+        "/api/v1/analyze",
+        json=payload,
+        headers={"Authorization": "Bearer test-token"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["classification"]["label"] == "other"
+    assert data["classification"]["confidence"] == 0.0
+

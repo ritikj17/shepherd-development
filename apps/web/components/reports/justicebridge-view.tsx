@@ -44,6 +44,7 @@ import { PageHeader } from "@/components/shared/page-header";
 import { MockDataBadge } from "@/components/shared/demo-notices";
 import { StatusBadge } from "@/components/shared/status-badges";
 import {
+  downloadIncidentReport,
   generateIncidentReport,
   listIncidentAnalyses,
   listIncidentEvidence,
@@ -204,6 +205,7 @@ export function JusticeBridgeView() {
   const [includeEvidence, setIncludeEvidence] = React.useState(true);
   const [includeAnalysis, setIncludeAnalysis] = React.useState(true);
   const [generating, setGenerating] = React.useState(false);
+  const [downloading, setDownloading] = React.useState(false);
   const [report, setReport] = React.useState<GeneratedReport | null>(null);
   const [formError, setFormError] = React.useState<string | null>(null);
 
@@ -284,6 +286,36 @@ export function JusticeBridgeView() {
       description:
         "Plain text only. This is not the generated report file the Core API would produce.",
     });
+  };
+
+  const handleDownload = async () => {
+    if (!report) return;
+    if (isMockApiEnabled) {
+      handleDemoDownload();
+      return;
+    }
+    setDownloading(true);
+    try {
+      const { blob, fileName } = await downloadIncidentReport(
+        report.report_id,
+        report.file_name,
+      );
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = fileName || "incident-report.pdf";
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 2_000);
+      toast.success("Report downloaded successfully");
+    } catch (cause) {
+      toast.error("Download failed", {
+        description: errorMessage(cause),
+      });
+    } finally {
+      setDownloading(false);
+    }
   };
 
   return (
@@ -548,16 +580,18 @@ export function JusticeBridgeView() {
 
                   {report.status === "generated" && report.download_url ? (
                     <div className="space-y-2">
-                      <Button asChild className="w-full">
-                        <a
-                          href={report.download_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          download
-                        >
+                      <Button
+                        type="button"
+                        className="w-full"
+                        onClick={handleDownload}
+                        disabled={downloading}
+                      >
+                        {downloading ? (
+                          <LoaderCircle className="size-4 animate-spin" />
+                        ) : (
                           <Download className="size-4" />
-                          Download report
-                        </a>
+                        )}
+                        {downloading ? "Downloading report..." : "Download report"}
                       </Button>
                       <p className="flex items-start gap-1.5 text-[10px] leading-relaxed text-muted-foreground">
                         <Timer className="mt-0.5 size-3 shrink-0" />

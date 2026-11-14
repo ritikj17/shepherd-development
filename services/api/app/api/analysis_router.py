@@ -103,10 +103,10 @@ async def get_incident_graph(
     # Ensure ownership check on incident
     await repo.get_incident(current_user.id, incident_id)
 
-    # Check if Intelligence API has updated graph representation
+    # Check if Intelligence API has updated graph representation with nodes or edges
     upstream_graph = await ai_client.get_graph(incident_id)
-    if upstream_graph:
+    if upstream_graph and (upstream_graph.get("nodes") or upstream_graph.get("edges")):
         return IncidentGraphResponse(**upstream_graph)
 
-    # Return repository graph
+    # Return repository graph (falls back safely when upstream is empty or unavailable)
     return await repo.get_incident_graph(current_user.id, incident_id)

@@ -225,3 +225,100 @@ async def test_incident_graph_endpoint(
     assert "edges" in graph
     assert len(graph["nodes"]) >= 1
     assert graph["nodes"][0]["id"] == incident_id
+
+
+@pytest.mark.asyncio
+async def test_incident_graph_upstream_populated(
+    client: AsyncClient, user_1_headers: dict
+) -> None:
+    """Verify that when upstream returns a populated graph with nodes, it is returned."""
+    inc_resp = await client.post(
+        "/api/v1/incidents",
+        json={
+            "title": "Incident with Upstream Graph",
+            "description": "description",
+            "category": "threat",
+            "occurred_at": "2026-11-12T10:00:00Z",
+        },
+        headers=user_1_headers,
+    )
+    incident_id = inc_resp.json()["id"]
+
+    class MockPopulatedGraphClient:
+        async def get_graph(self, iid: Any):
+            return {
+                "incident_id": str(iid),
+                "nodes": [{"id": str(iid), "label": "Upstream Node", "category": "threat"}],
+                "edges": [],
+            }
+
+    client._transport.app.dependency_overrides[get_intelligence_client] = lambda: MockPopulatedGraphClient()
+    try:
+        resp = await client.get(f"/api/v1/graph/{incident_id}", headers=user_1_headers)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data["nodes"]) == 1
+        assert data["nodes"][0]["label"] == "Upstream Node"
+    finally:
+        client._transport.app.dependency_overrides.pop(get_intelligence_client, None)
+
+
+@pytest.mark.asyncio
+async def test_incident_graph_upstream_empty_fallback_to_repo(
+    client: AsyncClient, user_1_headers: dict
+) -> None:
+    """Verify that when upstream returns empty nodes and edges, it falls back to repository graph."""
+    inc_resp = await client.post(
+        "/api/v1/incidents",
+        json={
+            "title": "Incident with Empty Upstream Graph",
+            "description": "description",
+            "category": "general_harassment",
+            "occurred_at": "2026-11-12T10:00:00Z",
+        },
+        headers=user_1_headers,
+    )
+    incident_id = inc_resp.json()["id"]
+
+    class MockEmptyGraphClient:
+        async def get_graph(self, iid: Any):
+            return {
+                "incident_id": str(iid),
+                "nodes": [],
+                "edges": [],
+            }
+
+    client._transport.app.dependency_overrides[get_intelligence_client] = lambda: MockEmptyGraphClient()
+    try:
+        resp = await client.get(f"/api/v1/graph/{incident_id}", headers=user_1_headers)
+        assert resp.status_code == 200
+        data = resp.json()
+        # Repository fallback returns at least the root incident node
+        assert len(data["nodes"]) >= 1
+        assert data["nodes"][0]["id"] == incident_id
+        assert data["nodes"][0]["label"] == "Incident with Empty Upstream Graph"
+    finally:
+        client._transport.app.dependency_overrides.pop(get_intelligence_client, None)
+
+
+@pytest.mark.asyncio
+async def test_incident_graph_cross_user_denied(
+    client: AsyncClient, user_1_headers: dict, user_2_headers: dict
+) -> None:
+    """Verify cross-user graph access is strictly denied."""
+    inc_resp = await client.post(
+        "/api/v1/incidents",
+        json={
+            "title": "Private User 1 Incident",
+            "description": "private",
+            "category": "threat",
+            "occurred_at": "2026-11-12T10:00:00Z",
+        },
+        headers=user_1_headers,
+    )
+    incident_id = inc_resp.json()["id"]
+
+    # User 2 attempts to query User 1's incident graph -> 404
+    resp = await client.get(f"/api/v1/graph/{incident_id}", headers=user_2_headers)
+    assert resp.status_code == 404
+
