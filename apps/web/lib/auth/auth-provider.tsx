@@ -48,13 +48,31 @@ interface AuthContextValue {
 
 const AuthContext = React.createContext<AuthContextValue | null>(null);
 
+const DEMO_COOKIE_NAME = "shepherd_demo_session";
+
+function setDemoCookie(enabled: boolean) {
+  if (typeof document === "undefined") return;
+  if (enabled) {
+    document.cookie = `${DEMO_COOKIE_NAME}=1; path=/; max-age=86400; SameSite=Lax`;
+  } else {
+    document.cookie = `${DEMO_COOKIE_NAME}=; path=/; max-age=0; SameSite=Lax`;
+  }
+}
+
 function readDemoSession(): DemoSession | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = window.localStorage.getItem(DEMO_SESSION_KEY);
-    if (!raw) return null;
+    if (!raw) {
+      setDemoCookie(false);
+      return null;
+    }
     const parsed = JSON.parse(raw) as DemoSession;
-    if (!parsed?.displayName) return null;
+    if (!parsed?.displayName) {
+      setDemoCookie(false);
+      return null;
+    }
+    setDemoCookie(true);
     return parsed;
   } catch {
     return null;
@@ -66,8 +84,10 @@ function writeDemoSession(session: DemoSession | null) {
   try {
     if (session) {
       window.localStorage.setItem(DEMO_SESSION_KEY, JSON.stringify(session));
+      setDemoCookie(true);
     } else {
       window.localStorage.removeItem(DEMO_SESSION_KEY);
+      setDemoCookie(false);
     }
   } catch {
     // Non-fatal: the demo session simply will not persist across reloads.

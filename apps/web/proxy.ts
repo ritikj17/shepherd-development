@@ -56,6 +56,9 @@ export async function proxy(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
+  const isDemo = request.cookies.get("shepherd_demo_session")?.value === "1";
+  const isAuthenticated = Boolean(user || isDemo);
+
   const { pathname, search } = request.nextUrl;
   const isAuthRoute = pathname === "/login" || pathname === "/signup";
   const isPublic =
@@ -64,7 +67,7 @@ export async function proxy(request: NextRequest) {
     isPublicAsset(pathname) ||
     pathname === "/";
 
-  if (!user && !isPublic) {
+  if (!isAuthenticated && !isPublic) {
     const redirectUrl = request.nextUrl.clone();
     redirectUrl.pathname = "/login";
     redirectUrl.search = "";
@@ -72,7 +75,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(redirectUrl);
   }
 
-  if (user && isAuthRoute) {
+  if (isAuthenticated && isAuthRoute) {
     const redirectUrl = request.nextUrl.clone();
     redirectUrl.pathname = "/dashboard";
     redirectUrl.search = "";
