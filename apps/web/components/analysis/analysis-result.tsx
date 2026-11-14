@@ -126,8 +126,8 @@ export function AnalysisResult({
                 </p>
               ) : (
                 <ul className="mt-2 space-y-2">
-                  {analysis.indicators.map((indicator) => (
-                    <li key={indicator.name} className="flex gap-2">
+                  {analysis.indicators.map((indicator, index) => (
+                    <li key={`${indicator.name}-${index}`} className="flex gap-2">
                       <span
                         aria-hidden="true"
                         className="mt-1.5 size-1.5 shrink-0 rounded-full bg-primary/60"
@@ -258,9 +258,9 @@ export function AnalysisResult({
         </CardHeader>
         <CardContent>
           <ul className="space-y-2">
-            {analysis.limitations.map((limitation) => (
+            {analysis.limitations.map((limitation, index) => (
               <li
-                key={limitation}
+                key={`${limitation}-${index}`}
                 className="flex items-start gap-2 text-sm leading-relaxed text-muted-foreground"
               >
                 <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-muted-foreground/70" />
