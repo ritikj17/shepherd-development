@@ -1,10 +1,11 @@
-from pydantic import BaseModel, Field, UUID4
+from pydantic import BaseModel, Field
+from uuid import UUID
 from typing import List, Optional
 from ..schemas.ocr import OCRResult
 from ..classifiers.deterministic import ClassificationResult
 
 class AnalyzeResponse(BaseModel):
-    incident_id: UUID4 = Field(..., description="Incident UUID")
+    incident_id: UUID = Field(..., description="Incident UUID")
     classification: ClassificationResult = Field(..., description="Classification result")
     indicators: List[dict] = Field(..., description="List of matched indicators")
     ocr: OCRResult = Field(..., description="OCR processing result for primary evidence")
