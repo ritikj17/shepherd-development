@@ -1,4 +1,5 @@
-from pydantic import BaseModel, Field, UUID4
+from pydantic import BaseModel, Field
+from uuid import UUID
 from typing import List, Dict, Any
 
 class GraphNode(BaseModel):
@@ -11,6 +12,6 @@ class GraphEdge(BaseModel):
     relationship: str = Field(..., description="Relationship type")
 
 class GraphResponse(BaseModel):
-    incident_id: UUID4 = Field(..., description="Incident UUID for which the graph is returned")
+    incident_id: UUID = Field(..., description="Incident UUID for which the graph is returned")
     nodes: List[GraphNode] = Field(default_factory=list, description="List of graph nodes")
     edges: List[GraphEdge] = Field(default_factory=list, description="List of graph edges")

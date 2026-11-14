@@ -30,13 +30,12 @@ def perform_ocr(mime_type: str, content_base64: str) -> Dict:
     """
     # 1️⃣ Validate MIME type
     if mime_type not in SUPPORTED_MIME_TYPES:
-        return {"status": "not_applicable"}
-
+        raise Exception("Unsupported MIME type")
     # 2️⃣ Decode Base64
     try:
         raw_bytes = base64.b64decode(content_base64)
     except Exception:
-        return {"status": "failed"}
+        raise Exception("Invalid base64 content")
 
     # 3️⃣ Enforce size limit
     if len(raw_bytes) > MAX_IMAGE_SIZE:
