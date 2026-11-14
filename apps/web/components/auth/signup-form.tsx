@@ -72,7 +72,7 @@ export function SignupForm() {
 
   const handleDemo = () => {
     enterDemo("Demo User");
-    router.replace("/dashboard");
+    window.location.href = "/dashboard";
   };
 
   if (awaitingConfirmation) {
@@ -118,28 +118,30 @@ export function SignupForm() {
         </p>
       </div>
 
-      {!authConfigured ? (
-        <div className="rounded-lg border border-[#e2d7bb] bg-[#fbf7ee] p-4 text-[#6d5420]">
-          <div className="flex items-start gap-2.5">
-            <FlaskConical className="mt-0.5 size-4 shrink-0" />
-            <div className="space-y-1">
-              <p className="text-sm font-semibold">Use the demo workspace</p>
-              <p className="text-xs leading-relaxed text-[#6d5420]/90">
-                Account creation requires Supabase configuration. The demo
-                workspace uses synthetic data stored only in this browser.
+      <div className="rounded-xl border border-[#c9e2d3] bg-[#f1f7f3] p-4 text-[#1a5c3d]">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="space-y-1">
+            <div className="flex items-center gap-1.5">
+              <FlaskConical className="size-3.5 text-[#1c6b47]" />
+              <p className="text-xs font-semibold uppercase tracking-wider text-[#1c6b47]">
+                Demo Testing Account
               </p>
             </div>
+            <p className="text-xs text-[#1a5c3d]/90 font-mono">
+              demo@shepherd.app &middot; DemoUser123!
+            </p>
           </div>
           <Button
             type="button"
+            size="sm"
             onClick={handleDemo}
-            className="mt-3 w-full bg-[#0f5a4e] text-white hover:bg-[#0c4c42]"
+            className="bg-[#0f5a4e] text-xs font-medium text-white shadow-sm hover:bg-[#0c4c42]"
           >
-            Enter demo workspace
-            <ArrowRight className="size-4" />
+            1-Click Demo Access
+            <ArrowRight className="size-3.5" />
           </Button>
         </div>
-      ) : null}
+      </div>
 
       {formError ? (
         <Alert variant="destructive">

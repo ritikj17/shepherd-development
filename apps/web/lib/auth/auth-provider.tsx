@@ -8,6 +8,12 @@ import { getBrowserSupabaseClient } from "@/lib/supabase/client";
 
 const DEMO_SESSION_KEY = "shepherd.demo.session.v1";
 
+export const DEMO_CREDENTIALS = {
+  email: "demo@shepherd.app",
+  password: "DemoUser123!",
+  displayName: "Demo User",
+} as const;
+
 export interface AuthUser {
   id: string;
   email: string;
@@ -116,6 +122,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   React.useEffect(() => {
     registerApiTokenProvider(async () => {
+      // If a demo session is active, provide the gated mock token for the in-memory backend adapter
+      const demo = readDemoSession();
+      if (demo) {
+        return "mock-user-demo";
+      }
+
       const supabase = getBrowserSupabaseClient();
       if (supabase) {
         const { data } = await supabase.auth.getSession();
@@ -166,8 +178,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(mapSupabaseUser(data.session.user));
         setStatus("authenticated");
       } else {
-        setUser(null);
-        setStatus("unauthenticated");
+        const demo = readDemoSession();
+        if (demo) {
+          setUser({
+            id: "demo-user",
+            email: demo.email,
+            displayName: demo.displayName,
+            isDemo: true,
+          });
+          setIsDemoSession(true);
+          setStatus("authenticated");
+        } else {
+          setUser(null);
+          setStatus("unauthenticated");
+        }
       }
     });
 
@@ -179,8 +203,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(mapSupabaseUser(session.user));
         setStatus("authenticated");
       } else {
-        setUser(null);
-        setStatus("unauthenticated");
+        const demo = readDemoSession();
+        if (demo) {
+          setUser({
+            id: "demo-user",
+            email: demo.email,
+            displayName: demo.displayName,
+            isDemo: true,
+          });
+          setIsDemoSession(true);
+          setStatus("authenticated");
+        } else {
+          setUser(null);
+          setStatus("unauthenticated");
+        }
       }
     });
 
@@ -190,19 +226,61 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  const signIn = React.useCallback(async (email: string, password: string) => {
-    const supabase = getBrowserSupabaseClient();
-    if (!supabase) {
-      throw new Error(
-        "Supabase authentication is not configured. Use the demo workspace or add the Supabase environment variables.",
-      );
-    }
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw new Error(mapAuthErrorMessage(error.message));
+  const enterDemo = React.useCallback((displayName?: string) => {
+    const session: DemoSession = {
+      displayName: displayName?.trim() || "Demo User",
+      email: "demo@shepherd.app",
+      createdAt: new Date().toISOString(),
+    };
+    writeDemoSession(session);
+    setUser({
+      id: "demo-user",
+      email: session.email,
+      displayName: session.displayName,
+      isDemo: true,
+    });
+    setIsDemoSession(true);
+    setStatus("authenticated");
   }, []);
+
+  const signIn = React.useCallback(
+    async (email: string, password: string) => {
+      const normalizedEmail = email.trim().toLowerCase();
+      // Allow default demo testing credentials in all environments
+      if (
+        (normalizedEmail === "demo@shepherd.app" ||
+          normalizedEmail === "demo@shepherd.local" ||
+          normalizedEmail === "demo@example.com") &&
+        (password === "DemoUser123!" || password === "demo1234")
+      ) {
+        enterDemo("Demo User");
+        return;
+      }
+
+      const supabase = getBrowserSupabaseClient();
+      if (!supabase) {
+        throw new Error(
+          "Supabase authentication is not configured. Use the demo testing account (demo@shepherd.app / DemoUser123!) or add the Supabase environment variables.",
+        );
+      }
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw new Error(mapAuthErrorMessage(error.message));
+    },
+    [enterDemo],
+  );
 
   const signUp = React.useCallback(
     async (input: { displayName: string; email: string; password: string }) => {
+      const normalizedEmail = input.email.trim().toLowerCase();
+      if (
+        normalizedEmail === "demo@shepherd.app" ||
+        normalizedEmail === "demo@shepherd.local" ||
+        normalizedEmail === "demo@example.com"
+      ) {
+        enterDemo(input.displayName || "Demo User");
+        return { requiresConfirmation: false };
+      }
+
       const supabase = getBrowserSupabaseClient();
       if (!supabase) {
         throw new Error(
@@ -217,7 +295,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (error) throw new Error(mapAuthErrorMessage(error.message));
       return { requiresConfirmation: !data.session };
     },
-    [],
+    [enterDemo],
   );
 
   const signOut = React.useCallback(async (options?: { global?: boolean }) => {
@@ -229,23 +307,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
     setIsDemoSession(false);
     setStatus("unauthenticated");
-  }, []);
-
-  const enterDemo = React.useCallback((displayName?: string) => {
-    const session: DemoSession = {
-      displayName: displayName?.trim() || "Demo User",
-      email: "demo@shepherd.local",
-      createdAt: new Date().toISOString(),
-    };
-    writeDemoSession(session);
-    setUser({
-      id: "demo-user",
-      email: session.email,
-      displayName: session.displayName,
-      isDemo: true,
-    });
-    setIsDemoSession(true);
-    setStatus("authenticated");
   }, []);
 
   const updateDisplayName = React.useCallback(

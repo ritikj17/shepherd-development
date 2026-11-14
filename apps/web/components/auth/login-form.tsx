@@ -47,7 +47,7 @@ export function LoginForm() {
     setFormError(null);
     try {
       await signIn(values.email, values.password);
-      router.replace(nextPath);
+      window.location.href = nextPath || "/dashboard";
     } catch (error) {
       setFormError(
         error instanceof Error ? error.message : "Could not sign in. Try again.",
@@ -57,7 +57,7 @@ export function LoginForm() {
 
   const handleDemo = () => {
     enterDemo("Demo User");
-    router.replace("/dashboard");
+    window.location.href = nextPath || "/dashboard";
   };
 
   const handleReset = async () => {
@@ -93,29 +93,34 @@ export function LoginForm() {
         </p>
       </div>
 
-      {!authConfigured ? (
-        <div className="rounded-lg border border-[#e2d7bb] bg-[#fbf7ee] p-4 text-[#6d5420]">
-          <div className="flex items-start gap-2.5">
-            <FlaskConical className="mt-0.5 size-4 shrink-0" />
-            <div className="space-y-1">
-              <p className="text-sm font-semibold">Demo workspace available</p>
-              <p className="text-xs leading-relaxed text-[#6d5420]/90">
-                Supabase authentication is not configured in this build. You can
-                explore the full interface with synthetic local data. No account
-                is created and nothing is uploaded.
+      <div className="rounded-xl border border-[#c9e2d3] bg-[#f1f7f3] p-4 text-[#1a5c3d]">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="space-y-1">
+            <div className="flex items-center gap-1.5">
+              <FlaskConical className="size-3.5 text-[#1c6b47]" />
+              <p className="text-xs font-semibold uppercase tracking-wider text-[#1c6b47]">
+                Demo Testing Account
               </p>
             </div>
+            <p className="text-xs text-[#1a5c3d]/90 font-mono">
+              demo@shepherd.app &middot; DemoUser123!
+            </p>
           </div>
           <Button
             type="button"
-            onClick={handleDemo}
-            className="mt-3 w-full bg-[#0f5a4e] text-white hover:bg-[#0c4c42]"
+            size="sm"
+            onClick={() => {
+              form.setValue("email", "demo@shepherd.app");
+              form.setValue("password", "DemoUser123!");
+              handleDemo();
+            }}
+            className="bg-[#0f5a4e] text-xs font-medium text-white shadow-sm hover:bg-[#0c4c42]"
           >
-            Enter demo workspace
-            <ArrowRight className="size-4" />
+            1-Click Demo Login
+            <ArrowRight className="size-3.5" />
           </Button>
         </div>
-      ) : null}
+      </div>
 
       {formError ? (
         <Alert variant="destructive">
