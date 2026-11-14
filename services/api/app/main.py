@@ -12,6 +12,7 @@ from app.core.exceptions import register_exception_handlers
 from app.core.logging import configure_logging
 from app.evidence.router import router as evidence_router
 from app.incidents.router import router as incidents_router
+from app.sentinel.router import relay_router, router as sentinel_router
 
 logger = logging.getLogger("shepherd.core")
 
@@ -60,6 +61,8 @@ def create_app() -> FastAPI:
     app.include_router(incidents_router)
     app.include_router(evidence_router)
     app.include_router(analysis_router)
+    app.include_router(sentinel_router)
+    app.include_router(relay_router)
 
     # 5. Member 4 Extension Point (SafeCircle, Notifications, JusticeBridge)
     # Automatically registers Member 4 modules if they are present

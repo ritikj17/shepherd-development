@@ -102,6 +102,7 @@ class InMemorySafetyRepository(BaseSafetyRepository):
             id=contact_id,
             name=record["name"],
             contact_method=ContactMethod(record["contact_method"]),
+            contact_value=record["contact_value"],
             created_at=record["created_at"],
         )
 
@@ -116,6 +117,7 @@ class InMemorySafetyRepository(BaseSafetyRepository):
                 id=c["id"],
                 name=c["name"],
                 contact_method=ContactMethod(c["contact_method"]),
+                contact_value=c.get("contact_value"),
                 created_at=c["created_at"],
             )
             for c in user_contacts
@@ -309,6 +311,7 @@ class SupabaseSafetyRepository(BaseSafetyRepository):
                 id=UUID(row["id"]),
                 name=row["name"],
                 contact_method=ContactMethod(row["contact_method"]),
+                contact_value=row.get("contact_value"),
                 created_at=datetime.fromisoformat(row["created_at"].replace("Z", "+00:00")),
             )
 
@@ -327,6 +330,7 @@ class SupabaseSafetyRepository(BaseSafetyRepository):
                     id=UUID(r["id"]),
                     name=r["name"],
                     contact_method=ContactMethod(r["contact_method"]),
+                    contact_value=r.get("contact_value"),
                     created_at=datetime.fromisoformat(r["created_at"].replace("Z", "+00:00")),
                 )
                 for r in rows

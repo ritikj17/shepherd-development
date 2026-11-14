@@ -40,6 +40,7 @@ def build_justicebridge_pdf(
     graph_data: Optional[Any] = None,
     include_evidence_index: bool = True,
     include_analysis: bool = True,
+    timeline_events: Optional[list[Any]] = None,
 ) -> bytes:
     """Generate a chronological, structured JusticeBridge PDF report using ReportLab."""
     buffer = io.BytesIO()
@@ -357,6 +358,48 @@ def build_justicebridge_pdf(
         elements.append(gr_table)
     else:
         elements.append(Paragraph("<i>No related incidents or connections identified in PatternGraph.</i>", body_style))
+
+    # 7. Sentinel & Live Incident Timeline
+    if timeline_events:
+        elements.append(Spacer(1, 14))
+        elements.append(Paragraph("5. Sentinel Live Incident & Response Timeline", section_heading))
+        t_rows = [
+            [
+                Paragraph("<b>Timestamp (UTC)</b>", body_style),
+                Paragraph("<b>Event Type</b>", body_style),
+                Paragraph("<b>Severity</b>", body_style),
+                Paragraph("<b>Details & Coordinates</b>", body_style),
+            ]
+        ]
+        for ev in timeline_events:
+            ts_str = ev.created_at.strftime("%Y-%m-%d %H:%M:%S") if hasattr(ev, "created_at") and ev.created_at else "N/A"
+            ev_type = getattr(ev, "event_type", "event")
+            sev = getattr(ev, "severity", "normal")
+            summary = getattr(ev, "summary", "")
+            loc = ""
+            if getattr(ev, "latitude", None) is not None and getattr(ev, "longitude", None) is not None:
+                acc = f" (±{ev.accuracy_meters:.0f}m)" if getattr(ev, "accuracy_meters", None) is not None else ""
+                loc = f"<br/><font color='#64748b' size='7'>GPS: {ev.latitude:.5f}, {ev.longitude:.5f}{acc}</font>"
+            t_rows.append(
+                [
+                    Paragraph(ts_str, body_style),
+                    Paragraph(_safe(ev_type.replace("_", " ").title()), body_style),
+                    Paragraph(_safe(sev.upper()), body_style),
+                    Paragraph(f"{_safe(summary)}{loc}", body_style),
+                ]
+            )
+        t_table = Table(t_rows, colWidths=[105, 115, 65, 247])
+        t_table.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f1f5f9")),
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#cbd5e1")),
+                    ("PADDING", (0, 0), (-1, -1), 4),
+                ]
+            )
+        )
+        elements.append(t_table)
 
     elements.append(Spacer(1, 16))
     elements.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#cbd5e1"), spaceAfter=8))

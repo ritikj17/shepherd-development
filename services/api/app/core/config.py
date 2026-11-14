@@ -43,6 +43,14 @@ class Settings(BaseSettings):
     # Evidence limits (10 MB default per docs/API_CONTRACTS.md)
     max_evidence_upload_bytes: int = Field(default=10 * 1024 * 1024, gt=0)
 
+    # Notifications & SMS Gateway
+    notification_provider: str = "mock"
+    twilio_account_sid: str = ""
+    twilio_auth_token: str = ""
+    twilio_from_number: str = ""
+    fast2sms_api_key: str = ""
+    app_public_url: str = "http://localhost:3000"
+
     # Mockable development/test adapter flag
     use_in_memory_adapter: bool = False
 

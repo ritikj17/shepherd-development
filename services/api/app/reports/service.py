@@ -52,6 +52,14 @@ class ReportService:
             except Exception as exc:
                 logger.warning("Could not retrieve incident graph: %s", exc)
 
+        timeline_events = []
+        try:
+            from app.sentinel.repository import get_sentinel_repository
+            sentinel_repo = get_sentinel_repository()
+            timeline_events = await sentinel_repo.get_timeline_events(user_id=user_id, incident_id=incident_id)
+        except Exception as exc:
+            logger.warning("Could not retrieve sentinel timeline events: %s", exc)
+
         report_id = uuid4()
         file_name = f"incident-report-{str(incident_id)[:8]}.pdf"
         now = datetime.now(timezone.utc)
@@ -66,6 +74,7 @@ class ReportService:
             graph_data=graph_data,
             include_evidence_index=data.include_evidence_index,
             include_analysis=data.include_analysis,
+            timeline_events=timeline_events,
         )
 
         # 5. Save report metadata and binary

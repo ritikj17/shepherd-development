@@ -30,6 +30,7 @@ class TrustedContactResponse(BaseModel):
     id: UUID
     name: str
     contact_method: ContactMethod
+    contact_value: Optional[str] = None
     created_at: datetime
 
 

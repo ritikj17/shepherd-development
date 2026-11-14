@@ -33,3 +33,16 @@ export {
   downloadIncidentReport,
   generateIncidentReport,
 } from "@/lib/api/reports";
+export {
+  acknowledgeRelay,
+  getActiveSentinelSession,
+  getLiveTimeline,
+  getRelayDetails,
+  pauseSentinelSession,
+  respondToVerification,
+  resumeSentinelSession,
+  sendSentinelLocation,
+  startSentinelSession,
+  stopSentinelSession,
+  triggerSilentAssist,
+} from "@/lib/api/sentinel";

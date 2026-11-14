@@ -6,6 +6,7 @@ import {
   Network,
   ScanSearch,
   Settings,
+  ShieldAlert,
   Users,
   type LucideIcon,
 } from "lucide-react";
@@ -66,6 +67,12 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: "Respond",
     items: [
+      {
+        href: "/sentinel",
+        label: "Sentinel",
+        description: "Active monitoring & live response",
+        icon: ShieldAlert,
+      },
       {
         href: "/safecircle",
         label: "SafeCircle",

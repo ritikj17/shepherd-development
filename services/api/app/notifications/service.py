@@ -201,6 +201,58 @@ class NotificationService:
     async def list_user_alerts(self, user_id: UUID) -> list[AlertResponse]:
         return await self.repo.list_alerts(user_id)
 
+    async def dispatch_sentinel_alert(
+        self,
+        user_id: UUID,
+        contact: Any,
+        relay_token: str,
+        user_display_name: str,
+        reason: str,
+        incident_id: Optional[UUID] = None,
+        session_id: Optional[UUID] = None,
+        public_url: str = "http://localhost:3000",
+    ) -> AlertResponse:
+        """Dispatch real emergency alert SMS to trusted contact with secure rescue relay link."""
+        contact_method = getattr(contact, "contact_method", "sms")
+        if hasattr(contact_method, "value"):
+            contact_method = contact_method.value
+        channel: AlertChannel = "email" if contact_method == "email" else "sms"
+        contact_id = getattr(contact, "id", None)
+        contact_value = getattr(contact, "contact_value", "")
+
+        relay_link = f"{public_url}/relay/{relay_token}"
+        subject = f"URGENT: SHEPHERD Safety Alert for {user_display_name}"
+        body = (
+            f"EMERGENCY ALERT: {user_display_name} has triggered a SHEPHERD distress signal ({reason}).\n\n"
+            f"Track live GPS location and confirm assistance here:\n"
+            f"{relay_link}\n\n"
+            f"(If you suspect immediate danger, dial 112 directly)."
+        )
+
+        try:
+            res = await self.provider.dispatch(
+                channel=channel,
+                recipient=contact_value,
+                subject=subject,
+                body=body,
+                message_type="sentinel_distress",
+            )
+        except Exception as exc:
+            logger.error("Provider dispatch error for sentinel alert: %s", exc)
+            from app.notifications.provider import NotificationResult
+            res = NotificationResult(status="failed", error_message=str(exc))
+
+        return await self.repo.create_alert(
+            user_id=user_id,
+            channel=channel,
+            status=res.status,
+            message_type="sentinel_distress",
+            safety_session_id=session_id,
+            trusted_contact_id=contact_id,
+            provider_reference=res.provider_reference,
+            error_message=res.error_message,
+        )
+
 
 def get_notification_service(
     settings: Settings = Depends(get_settings),
