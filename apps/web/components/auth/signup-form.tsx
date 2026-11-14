@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils/cn";
 import { useAuth } from "@/lib/auth/auth-provider";
 import { signupSchema, type SignupValues } from "@/lib/validation/auth";
 
@@ -147,7 +148,15 @@ export function SignupForm() {
         </Alert>
       ) : null}
 
-      <form onSubmit={onSubmit} className="space-y-4" noValidate>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          void onSubmit(e);
+        }}
+        className="space-y-4"
+        noValidate
+      >
         <div className="space-y-1.5">
           <Label htmlFor="display_name">Your name</Label>
           <Input
@@ -241,22 +250,48 @@ export function SignupForm() {
           name="acknowledge"
           render={({ field }) => (
             <div className="space-y-1.5">
-              <div className="flex items-start gap-2.5 rounded-lg border border-border bg-muted/30 p-3">
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={() => {
+                  if (authConfigured) {
+                    field.onChange(!field.value);
+                  }
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === " " || e.key === "Enter") {
+                    e.preventDefault();
+                    if (authConfigured) {
+                      field.onChange(!field.value);
+                    }
+                  }
+                }}
+                className={cn(
+                  "flex items-start gap-3 rounded-lg border p-3.5 transition-colors select-none",
+                  authConfigured
+                    ? "cursor-pointer"
+                    : "cursor-not-allowed opacity-60",
+                  field.value
+                    ? "border-primary/50 bg-primary/5 text-foreground"
+                    : "border-border bg-muted/30 hover:bg-muted/50 text-muted-foreground",
+                  form.formState.errors.acknowledge &&
+                    "border-destructive/60 bg-destructive/5"
+                )}
+              >
                 <Checkbox
                   id="acknowledge"
                   checked={field.value}
                   onCheckedChange={(checked) => field.onChange(checked === true)}
                   disabled={!authConfigured}
-                  className="mt-0.5"
+                  className="mt-0.5 pointer-events-none"
                 />
-                <Label
-                  htmlFor="acknowledge"
-                  className="cursor-pointer text-xs font-normal leading-relaxed text-muted-foreground"
-                >
-                  I understand that SHEPHERD is an informational documentation
-                  tool, not an emergency service, and that it does not
-                  automatically contact authorities or guarantee a response.
-                </Label>
+                <div className="space-y-1">
+                  <p className="text-xs font-normal leading-relaxed">
+                    I understand that SHEPHERD is an informational documentation
+                    tool, not an emergency service, and that it does not
+                    automatically contact authorities or guarantee a response.
+                  </p>
+                </div>
               </div>
               {form.formState.errors.acknowledge ? (
                 <p className="text-xs text-destructive">
