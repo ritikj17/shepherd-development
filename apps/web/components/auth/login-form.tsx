@@ -132,7 +132,15 @@ export function LoginForm() {
         </Alert>
       ) : null}
 
-      <form onSubmit={onSubmit} className="space-y-4" noValidate>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          void onSubmit(e);
+        }}
+        className="space-y-4"
+        noValidate
+      >
         <div className="space-y-1.5">
           <Label htmlFor="email">Email address</Label>
           <Input

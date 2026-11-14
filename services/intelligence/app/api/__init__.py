@@ -34,8 +34,11 @@ async def analyze(request: AnalyzeRequest):
             )
         ocr_results.append(ocr_res)
     # Concatenate all extracted text from successful OCRs
-    combined_text = " ".join([r.get("extracted_text", "") for r in ocr_results if r.get("status") == "completed"])
-    classification: ClassificationResult = classify_text(combined_text)
+    combined_text = " ".join([r.get("extracted_text", "") for r in ocr_results if r.get("status") == "completed"]).strip()
+    # Combine user-provided incident description with OCR text for classification
+    desc = (request.description or "").strip()
+    text_to_classify = f"{desc} {combined_text}".strip()
+    classification: ClassificationResult = classify_text(text_to_classify)
     # Compute risk factors based on description, OCR, classification, evidence count
     risk = compute_risk(request.description, request.evidence, ocr_results, classification)
     # Use first OCR result as contract‑required top‑level OCR field

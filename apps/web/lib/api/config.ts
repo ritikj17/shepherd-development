@@ -8,7 +8,10 @@
 const rawBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL?.trim() ?? "";
 const explicitMockFlag = process.env.NEXT_PUBLIC_USE_MOCK_API?.trim().toLowerCase();
 
-export const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() ?? "";
+const rawSupabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() ?? "";
+export const supabaseUrl = rawSupabaseUrl
+  .replace(/\/rest\/v1\/?$/, "")
+  .replace(/\/+$/, "");
 export const supabaseAnonKey =
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() ?? "";
 

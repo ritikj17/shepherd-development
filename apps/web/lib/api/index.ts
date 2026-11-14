@@ -29,4 +29,7 @@ export {
   listSafetySessions,
   listTrustedContacts,
 } from "@/lib/api/safety";
-export { generateIncidentReport } from "@/lib/api/reports";
+export {
+  downloadIncidentReport,
+  generateIncidentReport,
+} from "@/lib/api/reports";

@@ -117,9 +117,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   React.useEffect(() => {
     registerApiTokenProvider(async () => {
       const supabase = getBrowserSupabaseClient();
-      if (!supabase) return null;
-      const { data } = await supabase.auth.getSession();
-      return data.session?.access_token ?? null;
+      if (supabase) {
+        const { data } = await supabase.auth.getSession();
+        if (data.session?.access_token) {
+          return data.session.access_token;
+        }
+      }
+      // For unauthenticated local development demo mode when Supabase is unconfigured,
+      // provide the gated mock token for the in-memory backend adapter.
+      if (!isSupabaseConfigured) {
+        return "mock-user-demo";
+      }
+      return null;
     });
   }, []);
 

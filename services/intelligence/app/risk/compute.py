@@ -1,6 +1,18 @@
 import os
 from typing import List, Dict, Any
 
+# Helper to safely extract searchable text from an indicator
+def _indicator_text(indicator: Any) -> str:
+    """Extract searchable text from an indicator whether dict, str, or malformed."""
+    if isinstance(indicator, dict):
+        name = str(indicator.get("name") or "")
+        desc = str(indicator.get("description") or "")
+        return f"{name} {desc}".lower()
+    if isinstance(indicator, str):
+        return indicator.lower()
+    return str(indicator).lower() if indicator is not None else ""
+
+
 # Helper to create factor dicts
 def _factor(name: str, value: int | None, explanation: str, available: bool) -> Dict[str, Any]:
     # The API contract expects an integer value. When unavailable we set 0 but note it.
@@ -50,10 +62,13 @@ def compute_risk(description: str | None,
     t_value = None
     t_expl = "Threat severity derived from classification label and explicit threat indicators."
     if classification.label in THREAT_SEVERITY_MAP and classification.indicators:
-        if any(
-            any(kw in indicator.lower() for kw in explicit_threat_keywords)
-            for indicator in classification.indicators
-        ):
+        matched_threat = False
+        for ind in classification.indicators:
+            text = _indicator_text(ind)
+            if any(kw in text for kw in explicit_threat_keywords):
+                matched_threat = True
+                break
+        if matched_threat:
             t_value = THREAT_SEVERITY_MAP[classification.label]
             t_available = True
         else:
